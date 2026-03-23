@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>LinkPocket</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+        <link rel="stylesheet" href="popup.css" />
+    </head>
+    <body>
+
+        <!-- ===== LOGIN SCREEN ===== -->
+        <div id="loginScreen" class="screen">
+            <div class="login-wrapper">
+                <div class="login-brand">
+                    <div class="brand-logo">
+                        <img src="icons/icon128.png" width="48" height="48" alt="LinkPocket" class="brand-logo-img" />
+                    </div>
+                    <h1 class="brand-name">link<span class="brand-pocket">Pocket</span></h1>
+                    <p class="brand-tagline" data-i18n="connectDescription">Save any link, instantly.</p>
+                </div>
+
+                <div class="login-form">
+                    <div class="form-group">
+                        <label for="emailInput" data-i18n="email">Email</label>
+                        <div class="input-with-icon">
+                            <span class="material-symbols-outlined input-icon">mail</span>
+                            <input type="email" id="emailInput" data-i18n-placeholder="emailPlaceholder" placeholder="your@email.com" autocomplete="email" />
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="passwordInput" data-i18n="password">Password</label>
+                        <div class="input-with-icon">
+                            <span class="material-symbols-outlined input-icon">lock</span>
+                            <input type="password" id="passwordInput" data-i18n-placeholder="passwordPlaceholder" placeholder="••••••••" autocomplete="current-password" />
+                        </div>
+                    </div>
+                    <button id="connectBtn" class="btn-primary-volt btn-block">
+                        <span class="material-symbols-outlined">login</span>
+                        <span data-i18n="connect">Connect</span>
+                    </button>
+                    <a href="https://linkpocket.app" target="_blank" class="login-signup-link">
+                        <span data-i18n="noAccount">No account?</span> <strong>linkpocket.app</strong>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== APP SCREEN ===== -->
+        <div id="appScreen" class="screen hidden">
+
+            <!-- Top Header -->
+            <header class="app-header">
+                <div class="app-header-brand">
+                    <div class="header-logo">
+                        <img src="icons/icon32.png" width="20" height="20" alt="LinkPocket" />
+                    </div>
+                    <span class="header-title">link<span class="brand-pocket">Pocket</span></span>
+                </div>
+                <div class="app-header-right">
+                    <button id="openDashboardBtn" class="header-icon-btn" title="Open dashboard">
+                        <span class="material-symbols-outlined">open_in_new</span>
+                    </button>
+                    <button id="userMenuBtn" class="user-avatar-btn" id="userAvatar">
+                        <span id="userInitial">U</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- User Dropdown Menu -->
+            <div id="userDropdown" class="user-dropdown hidden">
+                <div class="user-dropdown-info">
+                    <div class="dropdown-avatar"><span id="dropdownInitial">U</span></div>
+                    <div>
+                        <div class="dropdown-name" id="dropdownName">User</div>
+                        <div class="dropdown-email" id="dropdownEmail">—</div>
+                    </div>
+                </div>
+                <div class="user-dropdown-divider"></div>
+                <a href="https://linkpocket.app/profile" target="_blank" class="dropdown-item">
+                    <span class="material-symbols-outlined">manage_accounts</span>
+                    <span data-i18n="profileSettings">Profile settings</span>
+                </a>
+                <button id="settingsMenuBtn" class="dropdown-item">
+                    <span class="material-symbols-outlined">tune</span>
+                    <span data-i18n="settings">Settings</span>
+                </button>
+                <div class="user-dropdown-divider"></div>
+                <button id="logoutBtn" class="dropdown-item danger">
+                    <span class="material-symbols-outlined">logout</span>
+                    <span data-i18n="logout">Logout</span>
+                </button>
+            </div>
+
+            <!-- Tab Panels -->
+            <main class="app-main">
+
+                <!-- ── SAVE TAB ── -->
+                <div id="savePanel" class="panel active">
+                    <div class="panel-scroll">
+                        <!-- Current page preview -->
+                        <div class="current-page-card" id="currentPageCard">
+                            <div class="current-page-favicon">
+                                <img id="currentFavicon" src="" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'" />
+                                <div class="favicon-fallback" style="display:none">🌐</div>
+                            </div>
+                            <div class="current-page-info">
+                                <div class="current-page-title" id="currentPageTitle">—</div>
+                                <div class="current-page-url" id="currentPageUrl">—</div>
+                            </div>
+                        </div>
+
+                        <form id="linkForm" class="save-form">
+                            <div class="form-group">
+                                <label for="linkTitle" data-i18n="title">Title <span class="required">*</span></label>
+                                <input type="text" id="linkTitle" data-i18n-placeholder="titlePlaceholder" placeholder="Enter link title" required />
+                            </div>
+
+                            <div class="form-group">
+                                <label for="linkUrl" data-i18n="url">URL <span class="required">*</span></label>
+                                <input type="url" id="linkUrl" data-i18n-placeholder="urlPlaceholder" placeholder="https://example.com" required />
+                            </div>
+
+                            <div class="form-group">
+                                <label for="linkDescription" data-i18n="description">Description</label>
+                                <textarea id="linkDescription" data-i18n-placeholder="descriptionPlaceholder" placeholder="Brief description (optional)" rows="2"></textarea>
+                            </div>
+
+                            <!-- Folder picker -->
+                            <div class="form-group">
+                                <label data-i18n="folder">Folder</label>
+                                <div class="picker-control" id="folderSelect">
+                                    <div class="picker-display" id="folderDisplay">
+                                        <div class="picker-selected" id="selectedFolderDisplay">
+                                            <span class="picker-placeholder" data-i18n="noFolder">No folder</span>
+                                        </div>
+                                        <span class="material-symbols-outlined picker-arrow">expand_more</span>
+                                    </div>
+                                    <div class="picker-dropdown hidden" id="folderDropdown">
+                                        <div class="picker-search-wrap">
+                                            <span class="material-symbols-outlined picker-search-icon">search</span>
+                                            <input type="text" id="folderSearch" data-i18n-placeholder="searchFolder" placeholder="Search or create folder..." />
+                                        </div>
+                                        <div class="picker-list" id="folderList"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tags picker -->
+                            <div class="form-group">
+                                <label data-i18n="tags">Tags</label>
+                                <div class="picker-control" id="tagsSelect">
+                                    <div class="tags-input-area" id="tagsInputArea">
+                                        <div class="selected-tags" id="selectedTagsList"></div>
+                                        <input type="text" id="tagsSearch" data-i18n-placeholder="searchTags" placeholder="Add tags..." />
+                                    </div>
+                                    <div class="picker-dropdown hidden" id="tagsDropdown">
+                                        <div class="picker-list" id="tagsList"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button type="submit" id="saveBtn" class="btn-primary-volt btn-block save-main-btn">
+                                <span class="material-symbols-outlined">bookmark_add</span>
+                                <span data-i18n="saveLink">Save to LinkPocket</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- ── LIBRARY TAB ── -->
+                <div id="libraryPanel" class="panel hidden">
+                    <div class="library-toolbar">
+                        <div class="library-search-wrap">
+                            <span class="material-symbols-outlined library-search-icon">search</span>
+                            <input type="text" id="librarySearchInput" data-i18n-placeholder="searchLinksPlaceholder" placeholder="Search links..." autocomplete="off" />
+                            <button class="library-search-clear hidden" id="librarySearchClear">
+                                <span class="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Filter chips -->
+                    <div class="filter-chips" id="filterChips">
+                        <button class="chip active" data-filter="recent" data-i18n="recent">Recent</button>
+                        <button class="chip" data-filter="favorites" data-i18n="favorites">Favorites</button>
+                    </div>
+
+                    <div class="links-list" id="linksList">
+                        <div class="links-empty" id="linksEmpty" style="display:none">
+                            <span class="material-symbols-outlined">link_off</span>
+                            <p data-i18n="noLinksFound">No links found</p>
+                        </div>
+                        <div class="links-skeleton" id="linksSkeleton">
+                            <div class="link-skeleton-item"></div>
+                            <div class="link-skeleton-item"></div>
+                            <div class="link-skeleton-item"></div>
+                            <div class="link-skeleton-item"></div>
+                            <div class="link-skeleton-item"></div>
+                        </div>
+                    </div>
+                    <div class="library-footer" id="libraryFooter" style="display:none">
+                        <a href="https://linkpocket.app" target="_blank" class="open-full-app">
+                            <span data-i18n="openFullApp">Open full app</span>
+                            <span class="material-symbols-outlined">open_in_new</span>
+                        </a>
+                    </div>
+                </div>
+
+            </main>
+
+            <!-- Bottom Navigation -->
+            <nav class="bottom-nav">
+                <button class="nav-item active" data-tab="save" id="navSave">
+                    <span class="material-symbols-outlined">bookmark_add</span>
+                    <span data-i18n="save">Save</span>
+                </button>
+                <button class="nav-item" data-tab="library" id="navLibrary">
+                    <span class="material-symbols-outlined">folder_open</span>
+                    <span data-i18n="library">Library</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- ===== SETTINGS SCREEN ===== -->
+        <div id="settingsScreen" class="screen hidden">
+            <header class="secondary-header">
+                <button id="settingsBackBtn" class="header-back-btn">
+                    <span class="material-symbols-outlined">arrow_back</span>
+                </button>
+                <h2 data-i18n="settingsTitle">Settings</h2>
+            </header>
+
+            <div class="settings-body">
+                <div class="settings-section">
+                    <div class="settings-label" data-i18n="language">Language</div>
+                    <div class="settings-row">
+                        <span class="material-symbols-outlined settings-row-icon">language</span>
+                        <select id="languageSelect">
+                            <option value="en">English</option>
+                            <option value="fr">Français</option>
+                            <option value="de">Deutsch</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <div class="settings-label" data-i18n="theme">Theme</div>
+                    <div class="settings-row">
+                        <span class="material-symbols-outlined settings-row-icon">contrast</span>
+                        <select id="themeSelect">
+                            <option value="dark" data-i18n="themeDark">Dark</option>
+                            <option value="light" data-i18n="themeLight">Light</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <div class="settings-row toggle-row">
+                        <span class="material-symbols-outlined settings-row-icon">auto_fix_high</span>
+                        <label class="toggle-label">
+                            <span data-i18n="autoFill">Auto-fill current page</span>
+                            <div class="toggle-track">
+                                <input type="checkbox" id="autoGetSelection" />
+                                <span class="toggle-thumb"></span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <div class="settings-label" data-i18n="shortcutTitle">Keyboard Shortcut</div>
+                    <div class="settings-row shortcut-row">
+                        <span class="material-symbols-outlined settings-row-icon">keyboard</span>
+                        <kbd id="currentShortcut">Alt + Shift + S</kbd>
+                        <button id="shortcutsBtn" class="btn-ghost-sm" data-i18n="changeShortcut">Change</button>
+                    </div>
+                </div>
+
+                <button id="saveSettingsBtn" class="btn-primary-volt btn-block">
+                    <span class="material-symbols-outlined">check</span>
+                    <span data-i18n="saveSettings">Save Settings</span>
+                </button>
+
+                <div class="settings-section danger-section">
+                    <div class="settings-label danger-label" data-i18n="dangerZone">Danger Zone</div>
+                    <button id="clearDataBtn" class="btn-danger-outline btn-block">
+                        <span class="material-symbols-outlined">delete_sweep</span>
+                        <span data-i18n="clearAllData">Disconnect &amp; Clear Data</span>
+                    </button>
+                    <p class="settings-hint" data-i18n="clearDataHint">Removes local data only. Your account is not affected.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast -->
+        <div id="toast" class="toast hidden">
+            <span class="material-symbols-outlined toast-icon" id="toastIcon">check_circle</span>
+            <span id="toastMessage"></span>
+        </div>
+
+        <!-- Global Loading -->
+        <div id="loadingOverlay" class="loading-overlay hidden">
+            <div class="spinner"></div>
+        </div>
+
+        <script src="locales.js"></script>
+        <script src="popup.js"></script>
+    </body>
+</html>

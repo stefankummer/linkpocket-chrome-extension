@@ -1,0 +1,34 @@
+{
+    "extensionName": {
+        "message": "LinkPocket",
+        "description": "Nom de l'extension"
+    },
+    "extensionDescription": {
+        "message": "Sauvegardez, organisez et recherchez vos liens depuis n'importe quel site.",
+        "description": "Description de l'extension"
+    },
+    "contextMenuSave": {
+        "message": "Sauvegarder dans LinkPocket",
+        "description": "Menu contextuel sauvegarder"
+    },
+    "contextMenuQuickSave": {
+        "message": "Sauvegarde rapide dans LinkPocket",
+        "description": "Menu contextuel sauvegarde rapide"
+    },
+    "notificationSaved": {
+        "message": "Lien sauvegardé avec succès !",
+        "description": "Notification sauvegardé"
+    },
+    "notificationFailed": {
+        "message": "Échec de la sauvegarde du lien",
+        "description": "Notification échec"
+    },
+    "notificationConnect": {
+        "message": "Veuillez d'abord vous connecter à LinkPocket",
+        "description": "Notification connexion"
+    },
+    "notificationSelectText": {
+        "message": "Aucune page détectée",
+        "description": "Notification aucune sélection"
+    }
+}

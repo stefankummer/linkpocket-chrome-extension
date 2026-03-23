@@ -1,0 +1,34 @@
+{
+    "extensionName": {
+        "message": "LinkPocket",
+        "description": "Name der Erweiterung"
+    },
+    "extensionDescription": {
+        "message": "Speichern, organisieren und durchsuchen Sie Ihre Links von jeder Website.",
+        "description": "Beschreibung der Erweiterung"
+    },
+    "contextMenuSave": {
+        "message": "In LinkPocket speichern",
+        "description": "Kontextmenü speichern"
+    },
+    "contextMenuQuickSave": {
+        "message": "Schnellspeichern in LinkPocket",
+        "description": "Kontextmenü Schnellspeichern"
+    },
+    "notificationSaved": {
+        "message": "Link erfolgreich gespeichert!",
+        "description": "Benachrichtigung gespeichert"
+    },
+    "notificationFailed": {
+        "message": "Link konnte nicht gespeichert werden",
+        "description": "Benachrichtigung fehlgeschlagen"
+    },
+    "notificationConnect": {
+        "message": "Bitte verbinden Sie sich zuerst mit LinkPocket",
+        "description": "Benachrichtigung verbinden"
+    },
+    "notificationSelectText": {
+        "message": "Keine Seite erkannt",
+        "description": "Benachrichtigung keine Auswahl"
+    }
+}

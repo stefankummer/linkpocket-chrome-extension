@@ -1,0 +1,34 @@
+{
+    "extensionName": {
+        "message": "LinkPocket",
+        "description": "Extension name"
+    },
+    "extensionDescription": {
+        "message": "Save, organize and search your bookmarks from any website.",
+        "description": "Extension description"
+    },
+    "contextMenuSave": {
+        "message": "Save to LinkPocket",
+        "description": "Context menu save"
+    },
+    "contextMenuQuickSave": {
+        "message": "Quick Save to LinkPocket",
+        "description": "Context menu quick save"
+    },
+    "notificationSaved": {
+        "message": "Link saved successfully!",
+        "description": "Notification saved"
+    },
+    "notificationFailed": {
+        "message": "Failed to save link",
+        "description": "Notification failed"
+    },
+    "notificationConnect": {
+        "message": "Please connect to LinkPocket first",
+        "description": "Notification connect"
+    },
+    "notificationSelectText": {
+        "message": "No page detected",
+        "description": "Notification no selection"
+    }
+}

@@ -2,6 +2,16 @@
 
 const LOCALES = {
     en: {
+        // AI features (Pro+)
+        aiGenerate: 'Generate',
+        aiSuggest: 'Suggest',
+        aiGenerateDescriptionTitle: 'Generate a description with AI (1 credit)',
+        aiSuggestTagsTitle: 'Suggest tags with AI (1 credit)',
+        aiCreditsRemaining: ':count AI credits remaining',
+        aiCreditsExhausted: 'AI credits exhausted — buy a pack from the Plan page',
+        aiUnavailable: 'AI is currently unavailable, please try again later',
+        aiApiOutdated: 'AI features are not available on this API endpoint yet',
+
         // Header
         appName: 'LinkPocket',
         settings: 'Settings',
@@ -37,6 +47,7 @@ const LOCALES = {
         description: 'Description',
         descriptionPlaceholder: 'Brief description (optional)',
         folder: 'Folder',
+        portfolio: 'Library',
         searchFolder: 'Search or create folder...',
         noFolder: 'No folder',
         createFolder: 'Create folder',
@@ -54,7 +65,6 @@ const LOCALES = {
 
         // Settings
         settingsTitle: 'Settings',
-        apiEndpoint: 'API Endpoint',
         language: 'Language',
         theme: 'Theme',
         themeSystem: 'System',
@@ -83,6 +93,16 @@ const LOCALES = {
         openLink: 'Open',
         back: 'Back',
 
+        // Connection
+        offline: 'Cannot reach LinkPocket',
+        offlineHint: 'Showing your last synced data.',
+        reconnecting: 'Reconnecting…',
+        reconnected: 'Connection restored',
+        retry: 'Retry',
+        planRequired: 'Your plan does not include API access.',
+        tooManyRequests: 'Too many requests, please wait a moment.',
+        serverError: 'LinkPocket is unavailable, please try again.',
+
         // Messages
         connectedSuccess: 'Connected successfully!',
         loggedOut: 'Logged out',
@@ -101,6 +121,16 @@ const LOCALES = {
     },
 
     fr: {
+        // AI features (Pro+)
+        aiGenerate: 'Générer',
+        aiSuggest: 'Suggérer',
+        aiGenerateDescriptionTitle: "Générer une description avec l'IA (1 crédit)",
+        aiSuggestTagsTitle: "Suggérer des tags avec l'IA (1 crédit)",
+        aiCreditsRemaining: ':count crédits IA restants',
+        aiCreditsExhausted: 'Crédits IA épuisés — achetez un pack depuis la page Plan',
+        aiUnavailable: "L'IA est indisponible pour le moment, réessayez plus tard",
+        aiApiOutdated: "Les fonctions IA ne sont pas encore disponibles sur ce point d'accès API",
+
         // Header
         appName: 'LinkPocket',
         settings: 'Paramètres',
@@ -136,6 +166,7 @@ const LOCALES = {
         description: 'Description',
         descriptionPlaceholder: 'Brève description (optionnel)',
         folder: 'Dossier',
+        portfolio: 'Bibliothèque',
         searchFolder: 'Rechercher ou créer un dossier...',
         noFolder: 'Aucun dossier',
         createFolder: 'Créer le dossier',
@@ -153,7 +184,6 @@ const LOCALES = {
 
         // Settings
         settingsTitle: 'Paramètres',
-        apiEndpoint: "Point d'accès API",
         language: 'Langue',
         theme: 'Thème',
         themeSystem: 'Système',
@@ -182,6 +212,16 @@ const LOCALES = {
         openLink: 'Ouvrir',
         back: 'Retour',
 
+        // Connection
+        offline: 'LinkPocket est injoignable',
+        offlineHint: 'Affichage des dernières données synchronisées.',
+        reconnecting: 'Reconnexion…',
+        reconnected: 'Connexion rétablie',
+        retry: 'Réessayer',
+        planRequired: "Votre offre n'inclut pas l'accès API.",
+        tooManyRequests: 'Trop de requêtes, patientez un instant.',
+        serverError: 'LinkPocket est indisponible, réessayez.',
+
         // Messages
         connectedSuccess: 'Connecté avec succès !',
         loggedOut: 'Déconnecté',
@@ -200,6 +240,16 @@ const LOCALES = {
     },
 
     de: {
+        // AI features (Pro+)
+        aiGenerate: 'Generieren',
+        aiSuggest: 'Vorschlagen',
+        aiGenerateDescriptionTitle: 'Beschreibung mit KI generieren (1 Guthaben)',
+        aiSuggestTagsTitle: 'Tags mit KI vorschlagen (1 Guthaben)',
+        aiCreditsRemaining: ':count KI-Guthaben übrig',
+        aiCreditsExhausted: 'KI-Guthaben aufgebraucht — Paket auf der Plan-Seite kaufen',
+        aiUnavailable: 'KI ist derzeit nicht verfügbar, bitte später erneut versuchen',
+        aiApiOutdated: 'KI-Funktionen sind auf diesem API-Endpunkt noch nicht verfügbar',
+
         // Header
         appName: 'LinkPocket',
         settings: 'Einstellungen',
@@ -235,6 +285,7 @@ const LOCALES = {
         description: 'Beschreibung',
         descriptionPlaceholder: 'Kurze Beschreibung (optional)',
         folder: 'Ordner',
+        portfolio: 'Bibliothek',
         searchFolder: 'Ordner suchen oder erstellen...',
         noFolder: 'Kein Ordner',
         createFolder: 'Ordner erstellen',
@@ -252,7 +303,6 @@ const LOCALES = {
 
         // Settings
         settingsTitle: 'Einstellungen',
-        apiEndpoint: 'API-Endpunkt',
         language: 'Sprache',
         theme: 'Design',
         themeSystem: 'System',
@@ -280,6 +330,16 @@ const LOCALES = {
         searchHint: 'Suche nach Titel, URL oder Beschreibung',
         openLink: 'Öffnen',
         back: 'Zurück',
+
+        // Connection
+        offline: 'LinkPocket ist nicht erreichbar',
+        offlineHint: 'Es werden die zuletzt synchronisierten Daten angezeigt.',
+        reconnecting: 'Neuverbindung…',
+        reconnected: 'Verbindung wiederhergestellt',
+        retry: 'Erneut versuchen',
+        planRequired: 'Ihr Tarif enthält keinen API-Zugriff.',
+        tooManyRequests: 'Zu viele Anfragen, bitte kurz warten.',
+        serverError: 'LinkPocket ist nicht verfügbar, bitte erneut versuchen.',
 
         // Messages
         connectedSuccess: 'Erfolgreich verbunden!',

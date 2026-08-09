@@ -5,8 +5,9 @@ const DEFAULT_SETTINGS = {
     autoGetSelection: true,
 };
 
-// Create context menu on install
-chrome.runtime.onInstalled.addListener(() => {
+// Create context menus on install and on every browser start — the service
+// worker is torn down aggressively, so menus must be (re)declared idempotently.
+function setupContextMenus() {
     chrome.contextMenus.removeAll(async () => {
         const { apiKey } = await chrome.storage.local.get(['apiKey']);
         const enabled = !!apiKey;
@@ -25,7 +26,10 @@ chrome.runtime.onInstalled.addListener(() => {
             enabled: enabled,
         });
     });
-});
+}
+
+chrome.runtime.onInstalled.addListener(setupContextMenus);
+chrome.runtime.onStartup.addListener(setupContextMenus);
 
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -43,6 +47,64 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
 });
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * POST a link with a hard timeout, so a flaky network does not look like a lost
+ * session. Only failures that provably never reached the API are replayed —
+ * the API does not de-duplicate, so replaying an ambiguous request (timeout,
+ * 5xx) would create a second link.
+ */
+async function postLink(endpoint, apiKey, body) {
+    const attempts = 3;
+    let lastError;
+
+    for (let attempt = 0; attempt < attempts; attempt++) {
+        if (attempt > 0) await sleep(500 * 2 ** (attempt - 1));
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 12000);
+
+        try {
+            const response = await fetch(`${endpoint}/links`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    Authorization: `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify(body),
+                signal: controller.signal,
+            });
+
+            if (response.ok) return response.json().catch(() => null);
+
+            const data = await response.json().catch(() => ({}));
+            const error = new Error(data.message || `Error ${response.status}`);
+            error.status = response.status;
+
+            // Rate limiting is the only rejection we know did not save anything
+            if (response.status !== 429) throw error;
+            lastError = error;
+        } catch (error) {
+            if (error.status) throw error;
+
+            if (error.name === 'AbortError') {
+                throw new Error(
+                    chrome.i18n.getMessage('notificationFailed') || 'Request timed out',
+                );
+            }
+
+            // Connection never established — safe to try again
+            lastError = error;
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    throw lastError;
+}
+
 // Quick save function
 async function quickSaveLink(url, title, tab) {
     try {
@@ -50,7 +112,8 @@ async function quickSaveLink(url, title, tab) {
         const syncData = await chrome.storage.sync.get(['settings']);
 
         const apiKey = localData.apiKey;
-        const mergedSettings = { ...DEFAULT_SETTINGS, ...syncData.settings };
+        // The endpoint is not user-configurable; always use the default
+        const mergedSettings = { ...DEFAULT_SETTINGS, ...syncData.settings, apiEndpoint: DEFAULT_SETTINGS.apiEndpoint };
 
         if (!apiKey) {
             await sendNotification(
@@ -61,23 +124,23 @@ async function quickSaveLink(url, title, tab) {
             return;
         }
 
-        const response = await fetch(`${mergedSettings.apiEndpoint}/links`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
+        try {
+            await postLink(mergedSettings.apiEndpoint, apiKey, {
                 url: url,
                 title: title || 'Quick Save',
-            }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.message || 'Failed to save');
+            });
+        } catch (error) {
+            // A confirmed authentication failure is the only reason to drop the
+            // token — anything else keeps the session intact.
+            if (error.status === 401) {
+                await chrome.storage.local.remove([
+                    'apiKey',
+                    'cachedUser',
+                    'cachedFolders',
+                    'cachedTags',
+                ]);
+            }
+            throw error;
         }
 
         await sendNotification(
@@ -173,8 +236,13 @@ async function updateContextMenu() {
     const { apiKey } = await chrome.storage.local.get(['apiKey']);
     const enabled = !!apiKey;
 
-    chrome.contextMenus.update('saveToLinkPocket', { enabled });
-    chrome.contextMenus.update('quickSaveToLinkPocket', { enabled });
+    try {
+        await chrome.contextMenus.update('saveToLinkPocket', { enabled });
+        await chrome.contextMenus.update('quickSaveToLinkPocket', { enabled });
+    } catch {
+        // Menus were dropped (worker restart, fresh profile) — recreate them
+        setupContextMenus();
+    }
 }
 
 // Listen for storage changes to update context menu

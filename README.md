@@ -68,6 +68,31 @@ diverger). La bibliothèque courante est persistée dans `chrome.storage.local`
 bibliothèque, aucun `portfolio_id` n'est envoyé — ce qui laisse remonter les liens
 enregistrés avant l'existence des bibliothèques.
 
+## Avatar
+
+Le popup affiche le même avatar que le site : `GET /api/user` renvoie
+`avatar_url`, qui vaut une URL gravatar absolue, un chemin relatif
+(`/storage/…`) pour une image téléversée, ou `null` quand le compte est réglé
+sur les initiales. Le chemin relatif est résolu contre l'hôte de l'API, et une
+image injoignable retombe sur l'initiale plutôt que de laisser un rond vide.
+
+## Filtres de la bibliothèque
+
+Trois chips, un seul actif à la fois : **Récents** (ordre de l'API,
+plus récent d'abord), **Favoris** (`?favorite=1`) et **A-Z**. Le tri A-Z
+s'applique **à l'intérieur de chaque dossier** — l'ordre des dossiers vient de
+l'API, qui les trie déjà par nom. Ni Récents ni A-Z n'émettent de requête
+propre : ils réordonnent la même page côté client.
+
+## Ouverture des liens
+
+La préférence **Ouvrir les liens dans un nouvel onglet** (activée par défaut)
+vaut pour les listes comme pour la palette. Désactivée, le lien remplace
+l'onglet courant. Dans les deux cas l'ouverture passe par l'API `tabs` et non
+par la navigation de l'ancre : avec `target="_self"` la page se chargerait
+*dans le popup*. Les clics modifiés (milieu, ctrl/cmd, maj) sont laissés au
+navigateur.
+
 ## Bibliothèque — accordéon par dossier
 
 Les liens sont groupés par dossier et imbriqués selon `parent_id`, chaque groupe

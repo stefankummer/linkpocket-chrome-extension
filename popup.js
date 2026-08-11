@@ -101,6 +101,7 @@ const DEFAULT_SETTINGS = {
 	autoGetSelection: true,
 	language: "en",
 	theme: "dark",
+	openInNewTab: true,
 	recentCount: DEFAULT_HOME_SECTION_SIZE,
 	favoritesCount: DEFAULT_HOME_SECTION_SIZE,
 };
@@ -843,6 +844,63 @@ class LinkPocketApp {
 		document.getElementById("dropdownInitial").textContent = initial;
 		document.getElementById("dropdownName").textContent = name;
 		document.getElementById("dropdownEmail").textContent = email;
+
+		this.renderAvatar();
+	}
+
+	/**
+	 * Same avatar as the web app: `avatar_url` is a full gravatar URL, a path
+	 * relative to the app for an uploaded picture, or null when the user picked
+	 * initials — which is what the popup already draws.
+	 */
+	renderAvatar() {
+		const url = this.absoluteAppUrl(this.user?.avatar_url);
+
+		for (const [imgId, initialId] of [
+			["userAvatarImg", "userInitial"],
+			["dropdownAvatarImg", "dropdownInitial"],
+		]) {
+			const img = document.getElementById(imgId);
+			const initial = document.getElementById(initialId);
+			if (!img || !initial) continue;
+
+			img.classList.toggle("hidden", !url);
+			initial.classList.toggle("hidden", !!url);
+			if (url && img.src !== url) {
+				// A dead avatar URL must not leave an empty circle
+				img.onerror = () => {
+					img.classList.add("hidden");
+					initial.classList.remove("hidden");
+				};
+				img.src = url;
+			}
+		}
+	}
+
+	/** Resolve an app-relative path against the API host. */
+	absoluteAppUrl(value) {
+		if (!value) return null;
+		if (/^https?:\/\//i.test(value)) return value;
+		try {
+			return new URL(value, new URL(this.settings.apiEndpoint).origin).href;
+		} catch {
+			return null;
+		}
+	}
+
+	/**
+	 * Honour the "open in a new tab" preference. The popup cannot simply let the
+	 * anchor navigate: with target="_self" the page would load inside the popup
+	 * itself, so the current tab is driven through the tabs API either way.
+	 */
+	openLink(url) {
+		const href = this.safeHref(url);
+		if (!href) return;
+
+		if (this.settings.openInNewTab === false) chrome.tabs.update({ url: href });
+		else chrome.tabs.create({ url: href });
+
+		window.close();
 	}
 
 	/** Internal browser pages carry no savable URL. */
@@ -1134,7 +1192,9 @@ class LinkPocketApp {
 	async loadLibrary() {
 		this.showLinksSkeleton(true);
 		try {
-			// Grouping by folder needs the whole library, not the first 24 rows
+			// Grouping by folder needs the whole library, not the first 24 rows.
+			// "recent" and "alpha" both list everything — they differ only in the
+			// order applied at render time, so neither needs its own query.
 			const params = this.scoped({ per_page: LIBRARY_PAGE_SIZE });
 			if (this.linksFilter === "favorites") params.favorite = 1;
 
@@ -1190,7 +1250,7 @@ class LinkPocketApp {
 		empty.style.display = "none";
 		footer.style.display = "";
 
-		const { byFolder, orphans } = this.groupLinksByFolder(links);
+		const { byFolder, orphans } = this.groupLinksByFolder(this.sortLinks(links));
 		const childrenOf = this.buildFolderTree();
 
 		const nodes = [];
@@ -1206,6 +1266,17 @@ class LinkPocketApp {
 
 		nodes.forEach((node) => list.insertBefore(node, empty));
 		list.style.opacity = "1";
+	}
+
+	/**
+	 * "A-Z" sorts by title inside each folder; the other filters keep the order
+	 * the API returned, which is already newest-first.
+	 */
+	sortLinks(links) {
+		if (this.linksFilter !== "alpha") return links;
+
+		const collator = new Intl.Collator(this.currentLang, { sensitivity: "base", numeric: true });
+		return [...links].sort((a, b) => collator.compare(a.title || a.url || "", b.title || b.url || ""));
 	}
 
 	/**
@@ -1472,12 +1543,7 @@ class LinkPocketApp {
 	}
 
 	openPaletteSelection() {
-		const link = this.paletteResults[this.paletteIndex];
-		const href = this.safeHref(link?.url);
-		if (!href) return;
-
-		chrome.tabs.create({ url: href });
-		window.close();
+		this.openLink(this.paletteResults[this.paletteIndex]?.url);
 	}
 
 	// ─── Save form ────────────────────────────────────────────────────────────
@@ -1874,6 +1940,16 @@ class LinkPocketApp {
 			if (head) this.toggleFolderGroup(head);
 		});
 
+		// ── Opening a link goes through the preference, wherever it was clicked.
+		// Modified clicks (middle, ctrl/cmd, shift) keep the browser's own
+		// behaviour, which the anchor href already provides.
+		document.addEventListener("click", (e) => {
+			const card = e.target.closest(".link-card");
+			if (!card || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+			e.preventDefault();
+			this.openLink(card.href);
+		});
+
 		// ── Home: "see all" jumps to the matching library filter ──
 		document.getElementById("homePanel").addEventListener("click", (e) => {
 			const more = e.target.closest("[data-goto-filter]");
@@ -1894,6 +1970,7 @@ class LinkPocketApp {
 			document.getElementById("languageSelect").value = this.settings.language || "en";
 			document.getElementById("themeSelect").value = this.settings.theme || "dark";
 			document.getElementById("autoGetSelection").checked = this.settings.autoGetSelection !== false;
+			document.getElementById("openInNewTabSetting").checked = this.settings.openInNewTab !== false;
 			document.getElementById("recentCountSelect").value = String(this.settings.recentCount);
 			document.getElementById("favoritesCountSelect").value = String(this.settings.favoritesCount);
 			this.closePalette();
@@ -1908,6 +1985,7 @@ class LinkPocketApp {
 			this.settings.language = document.getElementById("languageSelect").value;
 			this.settings.theme = document.getElementById("themeSelect").value;
 			this.settings.autoGetSelection = document.getElementById("autoGetSelection").checked;
+			this.settings.openInNewTab = document.getElementById("openInNewTabSetting").checked;
 			this.settings.recentCount = this.normalizeSectionSize(document.getElementById("recentCountSelect").value);
 			this.settings.favoritesCount = this.normalizeSectionSize(document.getElementById("favoritesCountSelect").value);
 

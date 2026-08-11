@@ -36,6 +36,7 @@ const LOCALES = {
         quickSave: 'Quick Save',
         recent: 'Recent',
         favorites: 'Favorites',
+        sortAZ: 'A-Z',
 
         // Home screen
         home: 'Home',
@@ -84,6 +85,7 @@ const LOCALES = {
         themeLight: 'Light',
         themeDark: 'Dark',
         autoFill: 'Auto-fill with current page info',
+        openInNewTab: 'Open links in a new tab',
         homeScreen: 'Home screen',
         homeCountHint: 'Number of rows per section. Set both to 0 to open straight on the library.',
         shortcutTitle: 'Keyboard Shortcut',
@@ -170,6 +172,7 @@ const LOCALES = {
         quickSave: 'Sauvegarde rapide',
         recent: 'Récents',
         favorites: 'Favoris',
+        sortAZ: 'A-Z',
 
         // Home screen
         home: 'Accueil',
@@ -218,6 +221,7 @@ const LOCALES = {
         themeLight: 'Clair',
         themeDark: 'Sombre',
         autoFill: 'Remplir automatiquement avec les infos de la page',
+        openInNewTab: 'Ouvrir les liens dans un nouvel onglet',
         homeScreen: 'Écran d’accueil',
         homeCountHint: 'Nombre de lignes par section. Mettez les deux à 0 pour ouvrir directement sur la bibliothèque.',
         shortcutTitle: 'Raccourci clavier',
@@ -304,6 +308,7 @@ const LOCALES = {
         quickSave: 'Schnellspeichern',
         recent: 'Letzte',
         favorites: 'Favoriten',
+        sortAZ: 'A-Z',
 
         // Home screen
         home: 'Start',
@@ -352,6 +357,7 @@ const LOCALES = {
         themeLight: 'Hell',
         themeDark: 'Dunkel',
         autoFill: 'Automatisch mit Seiteninfo ausfüllen',
+        openInNewTab: 'Links in neuem Tab öffnen',
         homeScreen: 'Startbildschirm',
         homeCountHint: 'Anzahl Zeilen pro Bereich. Beide auf 0 setzen, um direkt zur Bibliothek zu öffnen.',
         shortcutTitle: 'Tastenkombination',

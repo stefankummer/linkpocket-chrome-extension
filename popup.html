@@ -121,6 +121,11 @@
 					<button
 						id="userMenuBtn"
 						class="user-avatar-btn">
+						<img
+							id="userAvatarImg"
+							class="avatar-img hidden"
+							src=""
+							alt="" />
 						<span id="userInitial">U</span>
 					</button>
 				</div>
@@ -131,7 +136,14 @@
 				id="userDropdown"
 				class="user-dropdown hidden">
 				<div class="user-dropdown-info">
-					<div class="dropdown-avatar"><span id="dropdownInitial">U</span></div>
+					<div class="dropdown-avatar">
+						<img
+							id="dropdownAvatarImg"
+							class="avatar-img hidden"
+							src=""
+							alt="" />
+						<span id="dropdownInitial">U</span>
+					</div>
 					<div>
 						<div
 							class="dropdown-name"
@@ -599,6 +611,12 @@
 							data-i18n="favorites">
 							Favorites
 						</button>
+						<button
+							class="chip"
+							data-filter="alpha"
+							data-i18n="sortAZ">
+							A-Z
+						</button>
 					</div>
 
 					<div
@@ -724,6 +742,19 @@
 								<input
 									type="checkbox"
 									id="autoGetSelection" />
+								<span class="toggle-thumb"></span>
+							</div>
+						</label>
+					</div>
+
+					<div class="settings-row toggle-row">
+						<span class="material-symbols-outlined settings-row-icon">open_in_new</span>
+						<label class="toggle-label">
+							<span data-i18n="openInNewTab">Open links in a new tab</span>
+							<div class="toggle-track">
+								<input
+									type="checkbox"
+									id="openInNewTabSetting" />
 								<span class="toggle-thumb"></span>
 							</div>
 						</label>

@@ -36,6 +36,19 @@ const LOCALES = {
         quickSave: 'Quick Save',
         recent: 'Recent',
         favorites: 'Favorites',
+
+        // Home screen
+        home: 'Home',
+        addCurrentSite: 'Add current site',
+        currentSiteUnavailable: 'This page cannot be saved',
+        seeAll: 'See all',
+        uncategorized: 'No folder',
+
+        // Command palette
+        paletteHint: 'navigate',
+        paletteHintOpen: 'open',
+        paletteSearching: 'Searching…',
+        paletteNoResults: 'No link matches',
         noAccount: 'No account?',
         openFullApp: 'Open full app',
         profileSettings: 'Profile settings',
@@ -71,6 +84,8 @@ const LOCALES = {
         themeLight: 'Light',
         themeDark: 'Dark',
         autoFill: 'Auto-fill with current page info',
+        homeScreen: 'Home screen',
+        homeCountHint: 'Number of rows per section. Set both to 0 to open straight on the library.',
         shortcutTitle: 'Keyboard Shortcut',
         changeShortcut: 'Change',
         saveSettings: 'Save Settings',
@@ -155,6 +170,19 @@ const LOCALES = {
         quickSave: 'Sauvegarde rapide',
         recent: 'Récents',
         favorites: 'Favoris',
+
+        // Home screen
+        home: 'Accueil',
+        addCurrentSite: 'Ajouter le site actuel',
+        currentSiteUnavailable: 'Cette page ne peut pas être enregistrée',
+        seeAll: 'Voir tout',
+        uncategorized: 'Sans dossier',
+
+        // Command palette
+        paletteHint: 'naviguer',
+        paletteHintOpen: 'ouvrir',
+        paletteSearching: 'Recherche…',
+        paletteNoResults: 'Aucun lien ne correspond',
         noAccount: 'Pas de compte ?',
         openFullApp: 'Ouvrir l\'app',
         profileSettings: 'Paramètres du profil',
@@ -190,6 +218,8 @@ const LOCALES = {
         themeLight: 'Clair',
         themeDark: 'Sombre',
         autoFill: 'Remplir automatiquement avec les infos de la page',
+        homeScreen: 'Écran d’accueil',
+        homeCountHint: 'Nombre de lignes par section. Mettez les deux à 0 pour ouvrir directement sur la bibliothèque.',
         shortcutTitle: 'Raccourci clavier',
         changeShortcut: 'Modifier',
         saveSettings: 'Enregistrer',
@@ -274,6 +304,19 @@ const LOCALES = {
         quickSave: 'Schnellspeichern',
         recent: 'Letzte',
         favorites: 'Favoriten',
+
+        // Home screen
+        home: 'Start',
+        addCurrentSite: 'Aktuelle Seite hinzufügen',
+        currentSiteUnavailable: 'Diese Seite kann nicht gespeichert werden',
+        seeAll: 'Alle anzeigen',
+        uncategorized: 'Kein Ordner',
+
+        // Command palette
+        paletteHint: 'navigieren',
+        paletteHintOpen: 'öffnen',
+        paletteSearching: 'Suche…',
+        paletteNoResults: 'Kein Link gefunden',
         noAccount: 'Kein Konto?',
         openFullApp: 'App öffnen',
         profileSettings: 'Profileinstellungen',
@@ -309,6 +352,8 @@ const LOCALES = {
         themeLight: 'Hell',
         themeDark: 'Dunkel',
         autoFill: 'Automatisch mit Seiteninfo ausfüllen',
+        homeScreen: 'Startbildschirm',
+        homeCountHint: 'Anzahl Zeilen pro Bereich. Beide auf 0 setzen, um direkt zur Bibliothek zu öffnen.',
         shortcutTitle: 'Tastenkombination',
         changeShortcut: 'Ändern',
         saveSettings: 'Speichern',

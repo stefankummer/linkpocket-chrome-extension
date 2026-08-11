@@ -85,11 +85,31 @@ const FOLDER_ICON_KEYWORDS = [
 /** Default production API — overridable from the settings screen (EXT-32). */
 const DEFAULT_API_ENDPOINT = "https://linkpocket.app/api";
 
+/** Rows per home section: 0 hides it, 10 is the most the popup will render. */
+const MAX_HOME_SECTION_SIZE = 10;
+const DEFAULT_HOME_SECTION_SIZE = 5;
+
+/** One page of links is enough to group a library by folder. */
+const LIBRARY_PAGE_SIZE = 100;
+
+/** Group key for links that belong to no folder — never a real folder id. */
+const UNFILED_ID = "__unfiled__";
+
+/** Single source of truth so a reset restores exactly what a fresh install has. */
+const DEFAULT_SETTINGS = {
+	apiEndpoint: DEFAULT_API_ENDPOINT,
+	autoGetSelection: true,
+	language: "en",
+	theme: "dark",
+	recentCount: DEFAULT_HOME_SECTION_SIZE,
+	favoritesCount: DEFAULT_HOME_SECTION_SIZE,
+};
+
 class LinkPocketApp {
 	constructor() {
 		this.apiKey = null;
 		this.user = null;
-		this.settings = { apiEndpoint: DEFAULT_API_ENDPOINT, autoGetSelection: true, language: "en", theme: "dark" };
+		this.settings = { ...DEFAULT_SETTINGS };
 		this.tags = [];
 		this.folders = [];
 		this.portfolios = [];
@@ -103,11 +123,28 @@ class LinkPocketApp {
 		// Library state
 		this.links = [];
 		this.linksFilter = "recent";
-		this.linksSearchQuery = "";
 		this.linksLoaded = false;
+		this.collapsedFolders = new Set();
+
+		// Home state
+		this.homeRecent = [];
+		this.homeFavorites = [];
+		this.homeLoaded = false;
+		this.homeLoading = null;
+		this.homeAvailable = true;
+
+		// Active browser tab, or null when it cannot be saved
+		this.currentTab = null;
+
+		// Command palette state
+		this.paletteOpen = false;
+		this.paletteResults = [];
+		this.paletteIndex = -1;
+		this.paletteQuery = "";
+		this.paletteRequestId = 0;
 
 		// Active tab
-		this.activeTab = "save";
+		this.activeTab = "home";
 
 		// Connection state: 'online' | 'offline' | 'unknown'
 		this.connection = "unknown";
@@ -161,9 +198,27 @@ class LinkPocketApp {
 				if (data.settings) this.settings = { ...this.settings, ...data.settings };
 				// The endpoint is no longer user-configurable; ignore any stored override
 				this.settings.apiEndpoint = DEFAULT_API_ENDPOINT;
+
+				// v1.1 stored a separate on/off switch per section; a count of 0
+				// now carries that meaning. Fold the old flag in before dropping it.
+				if (data.settings?.showRecent === false) this.settings.recentCount = 0;
+				if (data.settings?.showFavorites === false) this.settings.favoritesCount = 0;
+				delete this.settings.showRecent;
+				delete this.settings.showFavorites;
+
+				// Stored counts may come from an older build or a hand-edited
+				// profile: clamp them so the home screen cannot request an absurd page.
+				this.settings.recentCount = this.normalizeSectionSize(this.settings.recentCount);
+				this.settings.favoritesCount = this.normalizeSectionSize(this.settings.favoritesCount);
 				resolve();
 			});
 		});
+	}
+
+	normalizeSectionSize(value) {
+		const size = parseInt(value, 10);
+		if (!Number.isFinite(size)) return DEFAULT_HOME_SECTION_SIZE;
+		return Math.min(Math.max(size, 0), MAX_HOME_SECTION_SIZE);
 	}
 
 	async saveSettings() {
@@ -178,13 +233,20 @@ class LinkPocketApp {
 	 */
 	async loadSession() {
 		return new Promise((resolve) => {
-			chrome.storage.local.get(["apiKey", "cachedUser", "cachedFolders", "cachedTags", "cachedPortfolios", "selectedPortfolioId"], (data) => {
+			const keys = ["apiKey", "cachedUser", "cachedFolders", "cachedTags", "cachedPortfolios", "selectedPortfolioId", "cachedHomeRecent", "cachedHomeFavorites", "collapsedFolders"];
+			chrome.storage.local.get(keys, (data) => {
 				this.apiKey = data.apiKey || null;
 				this.user = data.cachedUser || null;
 				this.folders = data.cachedFolders || [];
 				this.tags = data.cachedTags || [];
 				this.portfolios = data.cachedPortfolios || [];
 				this.selectedPortfolioId = data.selectedPortfolioId || null;
+				// The home screen paints from cache before the network answers.
+				this.homeRecent = data.cachedHomeRecent || [];
+				this.homeFavorites = data.cachedHomeFavorites || [];
+				// Folders are expanded by default: only the closed ones are stored,
+				// so a folder created later shows up open rather than hidden.
+				this.collapsedFolders = new Set(data.collapsedFolders || []);
 				resolve();
 			});
 		});
@@ -206,7 +268,7 @@ class LinkPocketApp {
 		this.apiKey = null;
 		this.user = null;
 		return new Promise((resolve) => {
-			chrome.storage.local.remove(["apiKey", "cachedUser", "cachedFolders", "cachedTags", "cachedPortfolios", "selectedPortfolioId"], resolve);
+			chrome.storage.local.remove(["apiKey", "cachedUser", "cachedFolders", "cachedTags", "cachedPortfolios", "selectedPortfolioId", "cachedHomeRecent", "cachedHomeFavorites", "collapsedFolders"], resolve);
 		});
 	}
 
@@ -224,8 +286,11 @@ class LinkPocketApp {
 					this.selectedFolder = null;
 					this.links = [];
 					this.linksLoaded = false;
-					this.linksSearchQuery = "";
-					this.settings = { apiEndpoint: DEFAULT_API_ENDPOINT, autoGetSelection: true, language: "en", theme: "dark" };
+					this.homeRecent = [];
+					this.homeFavorites = [];
+					this.homeLoaded = false;
+					this.collapsedFolders = new Set();
+					this.settings = { ...DEFAULT_SETTINGS };
 					resolve();
 				});
 			});
@@ -362,6 +427,7 @@ class LinkPocketApp {
 		}
 		this.reconcileSelectedPortfolio();
 		this.renderPortfolioSelect();
+		this.renderPortfolioBar();
 	}
 
 	/** Keep the persisted selection valid: fall back to the default portfolio. */
@@ -499,15 +565,25 @@ class LinkPocketApp {
 		const hasCache = !!this.user;
 		this.updateUserUI();
 		this.showScreen("appScreen");
-		this.switchTab("save");
+		this.switchTab("home");
 		this.setupPickers();
 		if (!hasCache) this.showLoading();
 		this.focusSearch();
 
-		if (this.settings.autoGetSelection) this.autoFillCurrentTab();
+		// Always needed: the home card offers to save the current page even
+		// when the save form is not auto-filled.
+		this.loadCurrentTab();
 
 		await this.syncSession({ silent: hasCache });
 		this.hideLoading();
+
+		// Refresh once the session is known to be valid: only now are the
+		// portfolios and folders known, which both views are scoped by.
+		await this.loadHome({ force: true });
+		if (this.activeTab === "library") {
+			this.linksLoaded = false;
+			await this.loadLibrary();
+		}
 	}
 
 	/**
@@ -714,6 +790,9 @@ class LinkPocketApp {
 			this.linksLoaded = false;
 			await this.loadLibrary();
 		}
+		if (ok && this.activeTab === "home") {
+			await this.loadHome({ force: true });
+		}
 
 		btn.disabled = false;
 		btn.textContent = this.t("retry");
@@ -766,30 +845,84 @@ class LinkPocketApp {
 		document.getElementById("dropdownEmail").textContent = email;
 	}
 
-	async autoFillCurrentTab() {
+	/** Internal browser pages carry no savable URL. */
+	isSavableTab(tab) {
+		return !!tab?.url && /^https?:\/\//i.test(tab.url);
+	}
+
+	faviconUrlFor(url) {
+		return `https://www.google.com/s2/favicons?sz=32&domain_url=${encodeURIComponent(url)}`;
+	}
+
+	/**
+	 * Resolve the active tab once, then feed both consumers: the home screen's
+	 * "add current site" card (always) and the save form (only when auto-fill
+	 * is on). Querying once keeps the two views from ever disagreeing.
+	 */
+	async loadCurrentTab() {
 		try {
 			const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-			if (tab && tab.url && !tab.url.startsWith("chrome://") && !tab.url.startsWith("chrome-extension://")) {
-				document.getElementById("linkUrl").value = tab.url;
-				document.getElementById("linkTitle").value = tab.title || "";
-
-				// Update page preview card
-				document.getElementById("currentPageTitle").textContent = tab.title || tab.url;
-				document.getElementById("currentPageUrl").textContent = tab.url;
-
-				// Try to load favicon
-				const faviconImg = document.getElementById("currentFavicon");
-				const iconUrl = `https://www.google.com/s2/favicons?sz=32&domain_url=${encodeURIComponent(tab.url)}`;
-				faviconImg.src = iconUrl;
-				faviconImg.style.display = "";
-
-				// EXT-33: complete title/description from the page's real meta
-				// tags, without ever blocking the instant tab.title prefill.
-				this.completeMetaFromApi(tab.url);
-			}
+			this.currentTab = this.isSavableTab(tab) ? tab : null;
 		} catch {
-			/* ignore */
+			this.currentTab = null;
 		}
+
+		this.renderCurrentSiteCard();
+		if (this.settings.autoGetSelection) this.autoFillCurrentTab();
+	}
+
+	/**
+	 * The button that jumps to the save tab, already filled in. It exists twice
+	 * — on the home screen, and in the library for when the home tab is off —
+	 * and both copies always show the same page.
+	 */
+	renderCurrentSiteCard() {
+		const cards = [
+			{ btn: "addCurrentBtn", url: "addCurrentUrl", img: "addCurrentFavicon" },
+			{ btn: "libraryAddCurrentBtn", url: "libraryAddCurrentUrl", img: "libraryAddCurrentFavicon" },
+		];
+
+		for (const ids of cards) {
+			const btn = document.getElementById(ids.btn);
+			const urlEl = document.getElementById(ids.url);
+			const img = document.getElementById(ids.img);
+			if (!btn || !urlEl || !img) continue;
+
+			if (!this.currentTab) {
+				btn.disabled = true;
+				urlEl.textContent = this.t("currentSiteUnavailable");
+				img.style.display = "none";
+				img.nextElementSibling.style.display = "flex";
+				continue;
+			}
+
+			btn.disabled = false;
+			urlEl.textContent = this.currentTab.title || this.currentTab.url;
+			img.src = this.faviconUrlFor(this.currentTab.url);
+			img.style.display = "";
+			img.nextElementSibling.style.display = "none";
+		}
+	}
+
+	autoFillCurrentTab() {
+		const tab = this.currentTab;
+		if (!tab) return;
+
+		document.getElementById("linkUrl").value = tab.url;
+		document.getElementById("linkTitle").value = tab.title || "";
+
+		// Update page preview card
+		document.getElementById("currentPageTitle").textContent = tab.title || tab.url;
+		document.getElementById("currentPageUrl").textContent = tab.url;
+
+		// Try to load favicon
+		const faviconImg = document.getElementById("currentFavicon");
+		faviconImg.src = this.faviconUrlFor(tab.url);
+		faviconImg.style.display = "";
+
+		// EXT-33: complete title/description from the page's real meta
+		// tags, without ever blocking the instant tab.title prefill.
+		this.completeMetaFromApi(tab.url);
 	}
 
 	/**
@@ -827,6 +960,8 @@ class LinkPocketApp {
 	// ─── Navigation ──────────────────────────────────────────────────────────
 
 	switchTab(tab) {
+		// The home tab disappears when it has nothing to show
+		if (tab === "home" && !this.homeAvailable) tab = "library";
 		this.activeTab = tab;
 
 		// Update nav buttons
@@ -835,16 +970,163 @@ class LinkPocketApp {
 		});
 
 		// Show/hide panels
-		document.getElementById("savePanel").classList.toggle("hidden", tab !== "save");
-		document.getElementById("libraryPanel").classList.toggle("hidden", tab !== "library");
+		const panels = { home: "homePanel", save: "savePanel", library: "libraryPanel" };
+		Object.entries(panels).forEach(([name, id]) => {
+			const panel = document.getElementById(id);
+			panel.classList.toggle("hidden", name !== tab);
+			panel.classList.toggle("active", name === tab);
+		});
 
-		document.getElementById("savePanel").classList.toggle("active", tab === "save");
-		document.getElementById("libraryPanel").classList.toggle("active", tab === "library");
+		// The save tab has its own library picker in the form
+		this.renderPortfolioBar();
+
+		if (tab === "home") {
+			this.renderHome();
+			if (!this.homeLoaded) this.loadHome();
+		}
 
 		if (tab === "library") {
-			this.focusSearch();
 			if (!this.linksLoaded) this.loadLibrary();
 		}
+	}
+
+	// ─── Home ────────────────────────────────────────────────────────────────
+
+	/**
+	 * Fetch whatever the enabled sections need, in parallel. A disabled section
+	 * costs no request. Failures are swallowed: the cached lists stay on screen
+	 * and the connection banner already tells the user what happened.
+	 */
+	async loadHome({ force = false } = {}) {
+		// Opening the popup renders the home tab and validates the session at
+		// almost the same moment; joining the in-flight call keeps that from
+		// firing the same two requests twice.
+		if (this.homeLoading) return this.homeLoading;
+		if (this.homeLoaded && !force) return;
+		if (!this.apiKey) return;
+
+		this.homeLoading = this.fetchHome().finally(() => {
+			this.homeLoading = null;
+		});
+		return this.homeLoading;
+	}
+
+	async fetchHome() {
+		const { recentCount, favoritesCount } = this.settings;
+		if (!recentCount && !favoritesCount) {
+			this.homeLoaded = true;
+			this.renderHome();
+			return;
+		}
+
+		const [recent, favorites] = await Promise.all([
+			recentCount ? this.fetchLinks(this.scoped({ per_page: recentCount })).catch(() => null) : null,
+			favoritesCount ? this.fetchLinks(this.scoped({ per_page: favoritesCount, favorite: 1 })).catch(() => null) : null,
+		]);
+
+		// `per_page` is honoured by recent API versions only — slice defensively
+		// so an older deployment cannot flood the popup with 24 rows.
+		this.homeRecent = recentCount && recent ? (recent.data || recent || []).slice(0, recentCount) : [];
+		this.homeFavorites = favoritesCount && favorites ? (favorites.data || favorites || []).slice(0, favoritesCount) : [];
+
+		this.cacheSession({ cachedHomeRecent: this.homeRecent, cachedHomeFavorites: this.homeFavorites });
+		this.homeLoaded = true;
+		this.renderHome();
+	}
+
+	renderHome() {
+		const { recentCount, favoritesCount } = this.settings;
+
+		const recentShown = this.renderHomeSection("homeRecentSection", "homeRecentList", this.homeRecent.slice(0, recentCount));
+		const favoritesShown = this.renderHomeSection("homeFavoritesSection", "homeFavoritesList", this.homeFavorites.slice(0, favoritesCount));
+
+		// Both counts at 0 is a settings decision — answerable straight away.
+		// Anything else has to wait for the first fetch, otherwise a cold start
+		// would read as "empty" and drop the home tab before it loaded.
+		const bothOff = !recentCount && !favoritesCount;
+		if (bothOff || this.homeLoaded) {
+			this.applyHomeAvailability(!bothOff && (recentShown || favoritesShown));
+		}
+	}
+
+	/**
+	 * An empty home tab is worse than no home tab: when both sections are set to
+	 * 0 or come back empty, hide the tab entirely, fall back to the library and
+	 * move the "add current site" button there so it stays one click away.
+	 */
+	applyHomeAvailability(hasContent) {
+		this.homeAvailable = hasContent;
+
+		document.getElementById("navHome").classList.toggle("hidden", !hasContent);
+		document.getElementById("libraryAddCurrentBtn").classList.toggle("hidden", hasContent);
+
+		if (!hasContent && this.activeTab === "home") this.switchTab("library");
+	}
+
+	/** Returns whether the section ended up visible. */
+	renderHomeSection(sectionId, listId, links) {
+		const section = document.getElementById(sectionId);
+		const visible = links.length > 0;
+		section.classList.toggle("hidden", !visible);
+
+		// Always rewrite the list, even when hidden: leaving stale cards behind
+		// would show yesterday's links the next time the section reappears.
+		document.getElementById(listId).replaceChildren(...links.map((link) => this.createLinkCard(link)));
+
+		return visible;
+	}
+
+	// ─── Library scoping ─────────────────────────────────────────────────────
+
+	/**
+	 * Add the selected library to a query — but only when the account actually
+	 * has several. With a single library the filter is noise, and it would hide
+	 * links saved before portfolios existed.
+	 */
+	scoped(params = {}) {
+		if (this.portfolios.length > 1 && this.selectedPortfolioId) {
+			return { ...params, portfolio_id: this.selectedPortfolioId };
+		}
+		return params;
+	}
+
+	/** The switcher only earns its space when there is something to switch to. */
+	renderPortfolioBar() {
+		const bar = document.getElementById("portfolioBar");
+		const select = document.getElementById("globalPortfolioSelect");
+		const multiple = this.portfolios.length > 1;
+
+		bar.classList.toggle("hidden", !multiple || this.activeTab === "save");
+		if (!multiple) return;
+
+		select.innerHTML = this.portfolios.map((p) => `<option value="${p.id}">${this.escapeHtml(p.name)}</option>`).join("");
+		if (this.selectedPortfolioId) select.value = String(this.selectedPortfolioId);
+	}
+
+	/** Switching library invalidates everything scoped to the previous one. */
+	async selectPortfolio(id) {
+		if (!id || id === this.selectedPortfolioId) return;
+
+		this.selectedPortfolioId = id;
+		this.cacheSession({ selectedPortfolioId: id });
+
+		// A folder lives in exactly one library
+		if (this.selectedFolder && this.selectedFolder.portfolio_id !== id) {
+			this.selectedFolder = null;
+			this.renderSelectedFolder();
+		}
+
+		this.renderPortfolioSelect();
+		this.renderPortfolioBar();
+
+		await this.fetchFolders();
+		this.renderFolderList(document.getElementById("folderSearch")?.value || "");
+
+		this.homeLoaded = false;
+		this.linksLoaded = false;
+
+		await this.loadHome({ force: true });
+		if (this.activeTab === "library") await this.loadLibrary();
 	}
 
 	// ─── Library ─────────────────────────────────────────────────────────────
@@ -852,11 +1134,13 @@ class LinkPocketApp {
 	async loadLibrary() {
 		this.showLinksSkeleton(true);
 		try {
-			const params = {};
+			// Grouping by folder needs the whole library, not the first 24 rows
+			const params = this.scoped({ per_page: LIBRARY_PAGE_SIZE });
 			if (this.linksFilter === "favorites") params.favorite = 1;
-			if (this.linksSearchQuery) params.search = this.linksSearchQuery;
 
-			const res = await this.fetchLinks(params);
+			// The tab can be opened before syncSession has fetched the folder
+			// tree; without it every link would land under "no folder".
+			const [res] = await Promise.all([this.fetchLinks(params), this.folders.length ? Promise.resolve() : this.fetchFolders()]);
 			this.links = res?.data || res || [];
 			this.renderLinks(this.links);
 			this.linksLoaded = true;
@@ -884,56 +1168,316 @@ class LinkPocketApp {
 		document.getElementById("linksList").style.opacity = show ? "0" : "1";
 	}
 
+	/**
+	 * The library is grouped by folder, nested to match the folder tree. Every
+	 * group is collapsible; collapsed ones are remembered across popup opens so
+	 * a folder the user closed does not reappear expanded.
+	 */
 	renderLinks(links) {
 		const list = document.getElementById("linksList");
 		const empty = document.getElementById("linksEmpty");
 		const footer = document.getElementById("libraryFooter");
 
-		// Remove all existing link cards
-		list.querySelectorAll(".link-card").forEach((el) => el.remove());
+		list.querySelectorAll(".folder-group, .link-card").forEach((el) => el.remove());
 
 		if (!links || links.length === 0) {
 			empty.style.display = "";
 			footer.style.display = "none";
+			list.style.opacity = "1";
 			return;
 		}
 
 		empty.style.display = "none";
 		footer.style.display = "";
 
-		links.forEach((link) => {
-			const card = document.createElement("a");
-			card.href = link.url;
+		const { byFolder, orphans } = this.groupLinksByFolder(links);
+		const childrenOf = this.buildFolderTree();
+
+		const nodes = [];
+		for (const folder of childrenOf.get(null) || []) {
+			const group = this.createFolderGroup(folder, childrenOf, byFolder, 0);
+			if (group) nodes.push(group);
+		}
+
+		// Links that belong to no folder — or to one this library does not know
+		if (orphans.length) {
+			nodes.push(this.createGroup(UNFILED_ID, this.t("uncategorized"), "folder_off", orphans, [], 0));
+		}
+
+		nodes.forEach((node) => list.insertBefore(node, empty));
+		list.style.opacity = "1";
+	}
+
+	/**
+	 * A link can sit in several folders, so it is listed under each of them.
+	 * Links whose folders are unknown here fall back to the unfiled group,
+	 * which guarantees every link is reachable.
+	 */
+	groupLinksByFolder(links) {
+		const known = new Set(this.folders.map((f) => f.id));
+		const byFolder = new Map();
+		const orphans = [];
+
+		for (const link of links) {
+			const folders = (link.categories || []).filter((c) => known.has(c.id));
+			if (!folders.length) {
+				orphans.push(link);
+				continue;
+			}
+			for (const folder of folders) {
+				if (!byFolder.has(folder.id)) byFolder.set(folder.id, []);
+				byFolder.get(folder.id).push(link);
+			}
+		}
+
+		return { byFolder, orphans };
+	}
+
+	/** parent_id → children, with roots under `null`. */
+	buildFolderTree() {
+		const known = new Set(this.folders.map((f) => f.id));
+		const childrenOf = new Map();
+
+		for (const folder of this.folders) {
+			// A parent outside this library would strand the whole subtree
+			const parent = folder.parent_id && known.has(folder.parent_id) ? folder.parent_id : null;
+			if (!childrenOf.has(parent)) childrenOf.set(parent, []);
+			childrenOf.get(parent).push(folder);
+		}
+
+		return childrenOf;
+	}
+
+	/** Builds one folder and its subtree, or null when the whole subtree is empty. */
+	createFolderGroup(folder, childrenOf, byFolder, depth) {
+		const children = (childrenOf.get(folder.id) || [])
+			.map((child) => this.createFolderGroup(child, childrenOf, byFolder, depth + 1))
+			.filter(Boolean);
+
+		const links = byFolder.get(folder.id) || [];
+		if (!links.length && !children.length) return null;
+
+		return this.createGroup(folder.id, folder.name, null, links, children, depth, folder);
+	}
+
+	createGroup(id, name, icon, links, children, depth, folder = null) {
+		const key = String(id);
+		const collapsed = this.collapsedFolders.has(key);
+
+		const group = document.createElement("div");
+		group.className = "folder-group";
+		group.dataset.folderKey = key;
+
+		const head = document.createElement("button");
+		head.type = "button";
+		head.className = `folder-head${collapsed ? " collapsed" : ""}`;
+		head.style.paddingLeft = `${12 + depth * 14}px`;
+		head.setAttribute("aria-expanded", String(!collapsed));
+
+		// Count the subtree, so a collapsed parent still says how much it holds
+		const total = links.length + children.reduce((sum, child) => sum + Number(child.dataset.total || 0), 0);
+
+		head.innerHTML = `
+                <span class="material-symbols-outlined folder-caret">chevron_right</span>
+                ${icon ? `<span class="material-symbols-outlined picker-icon">${icon}</span>` : this.folderIconHtml(folder)}
+                <span class="folder-name">${this.escapeHtml(name)}</span>
+                <span class="folder-count">${total}</span>
+            `;
+
+		const body = document.createElement("div");
+		body.className = `folder-body${collapsed ? " hidden" : ""}`;
+		body.append(...links.map((link) => this.createLinkCard(link)), ...children);
+
+		group.dataset.total = String(total);
+		group.append(head, body);
+		return group;
+	}
+
+	toggleFolderGroup(head) {
+		const group = head.closest(".folder-group");
+		const body = group.querySelector(".folder-body");
+		const key = group.dataset.folderKey;
+		const collapsed = !head.classList.contains("collapsed");
+
+		head.classList.toggle("collapsed", collapsed);
+		body.classList.toggle("hidden", collapsed);
+		head.setAttribute("aria-expanded", String(!collapsed));
+
+		if (collapsed) this.collapsedFolders.add(key);
+		else this.collapsedFolders.delete(key);
+
+		this.cacheSession({ collapsedFolders: [...this.collapsedFolders] });
+	}
+
+	/** Hostname for display; a malformed URL must not break the whole list. */
+	linkDomain(link) {
+		if (link.domain) return link.domain;
+		try {
+			return new URL(link.url).hostname;
+		} catch {
+			return link.url || "";
+		}
+	}
+
+	/**
+	 * Only http(s) links are ever navigable — the API validates this on write,
+	 * but the popup renders cached rows that may predate that validation.
+	 */
+	safeHref(url) {
+		return /^https?:\/\//i.test(url || "") ? url : null;
+	}
+
+	/** One row, shared by the library list and both home sections. */
+	createLinkCard(link) {
+		const href = this.safeHref(link.url);
+		const card = document.createElement("a");
+		card.href = href || "#";
+		if (href) {
 			card.target = "_blank";
 			card.rel = "noopener noreferrer";
-			card.className = "link-card";
-			card.dataset.linkId = link.id;
+		}
+		card.className = "link-card";
+		card.dataset.linkId = link.id;
 
-			const faviconUrl = link.favicon_path || link.favicon;
-			const faviconHtml = faviconUrl
-				? `<img src="${this.escapeHtml(faviconUrl)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><span class="link-favicon-fallback" style="display:none">🌐</span>`
-				: `<span class="link-favicon-fallback">🌐</span>`;
+		const faviconUrl = link.favicon_path || link.favicon;
+		const faviconHtml = faviconUrl
+			? `<img src="${this.escapeHtml(faviconUrl)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><span class="link-favicon-fallback" style="display:none">🌐</span>`
+			: `<span class="link-favicon-fallback">🌐</span>`;
 
-			const favIcon = link.is_favorite
-				? `<span class="material-symbols-outlined link-fav-icon" style="font-variation-settings:'FILL' 1">bookmark</span>`
-				: "";
+		const favIcon = link.is_favorite
+			? `<span class="material-symbols-outlined link-fav-icon" style="font-variation-settings:'FILL' 1">bookmark</span>`
+			: "";
 
-			card.innerHTML = `
+		card.innerHTML = `
                 <div class="link-favicon-wrap">${faviconHtml}</div>
                 <div class="link-info">
                     <div class="link-title">${this.escapeHtml(link.title || link.url)}</div>
                     <div class="link-meta">
-                        <span class="link-domain">${this.escapeHtml(link.domain || new URL(link.url).hostname)}</span>
+                        <span class="link-domain">${this.escapeHtml(this.linkDomain(link))}</span>
                         ${favIcon}
                     </div>
                 </div>
                 <span class="material-symbols-outlined link-card-open">open_in_new</span>
             `;
 
-			list.insertBefore(card, empty);
-		});
+		return card;
+	}
 
-		list.style.opacity = "1";
+	// ─── Command palette ─────────────────────────────────────────────────────
+
+	openPalette() {
+		this.paletteOpen = true;
+		document.getElementById("commandPalette").classList.remove("hidden");
+		document.getElementById("globalSearchInput").setAttribute("aria-expanded", "true");
+	}
+
+	closePalette() {
+		this.paletteOpen = false;
+		this.paletteResults = [];
+		this.paletteIndex = -1;
+		document.getElementById("commandPalette").classList.add("hidden");
+		document.getElementById("globalSearchInput").setAttribute("aria-expanded", "false");
+	}
+
+	/**
+	 * Search on every keystroke. Responses can land out of order, so a request
+	 * counter drops anything that is no longer the current query.
+	 */
+	async runPaletteSearch(query) {
+		if (!query) {
+			this.closePalette();
+			return;
+		}
+
+		this.paletteQuery = query;
+		this.openPalette();
+
+		const requestId = ++this.paletteRequestId;
+		if (!this.paletteResults.length) this.renderPaletteState(this.t("paletteSearching"));
+
+		let links = [];
+		try {
+			const res = await this.fetchLinks({ search: query, per_page: 8 });
+			links = (res?.data || res || []).slice(0, 8);
+		} catch (err) {
+			if (requestId !== this.paletteRequestId) return;
+			this.renderPaletteState(err.message);
+			return;
+		}
+
+		if (requestId !== this.paletteRequestId) return;
+
+		this.paletteResults = links;
+		this.paletteIndex = links.length ? 0 : -1;
+		this.renderPalette();
+	}
+
+	renderPaletteState(message) {
+		document.getElementById("paletteResults").innerHTML = `<div class="palette-state">${this.escapeHtml(message)}</div>`;
+	}
+
+	renderPalette() {
+		const container = document.getElementById("paletteResults");
+
+		if (!this.paletteResults.length) {
+			this.renderPaletteState(this.t("paletteNoResults"));
+			return;
+		}
+
+		container.replaceChildren(
+			...this.paletteResults.map((link, index) => {
+				const item = document.createElement("div");
+				item.className = `palette-item${index === this.paletteIndex ? " active" : ""}`;
+				item.setAttribute("role", "option");
+				item.setAttribute("aria-selected", String(index === this.paletteIndex));
+				item.dataset.index = index;
+
+				const faviconUrl = link.favicon_path || link.favicon;
+				const faviconHtml = faviconUrl
+					? `<img src="${this.escapeHtml(faviconUrl)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><span class="link-favicon-fallback" style="display:none">🌐</span>`
+					: `<span class="link-favicon-fallback">🌐</span>`;
+
+				item.innerHTML = `
+                    <div class="link-favicon-wrap">${faviconHtml}</div>
+                    <div class="palette-item-info">
+                        <div class="palette-item-title">${this.highlight(link.title || link.url, this.paletteQuery)}</div>
+                        <div class="palette-item-domain">${this.escapeHtml(this.linkDomain(link))}</div>
+                    </div>
+                `;
+				return item;
+			}),
+		);
+	}
+
+	/** Escape first, then wrap the matched run — never the other way round. */
+	highlight(text, query) {
+		const safe = this.escapeHtml(text || "");
+		const needle = this.escapeHtml(query || "");
+		if (!needle) return safe;
+
+		const at = safe.toLowerCase().indexOf(needle.toLowerCase());
+		if (at === -1) return safe;
+
+		return `${safe.slice(0, at)}<mark>${safe.slice(at, at + needle.length)}</mark>${safe.slice(at + needle.length)}`;
+	}
+
+	movePaletteSelection(delta) {
+		if (!this.paletteResults.length) return;
+
+		const count = this.paletteResults.length;
+		this.paletteIndex = (this.paletteIndex + delta + count) % count;
+		this.renderPalette();
+
+		document.querySelector(".palette-item.active")?.scrollIntoView({ block: "nearest" });
+	}
+
+	openPaletteSelection() {
+		const link = this.paletteResults[this.paletteIndex];
+		const href = this.safeHref(link?.url);
+		if (!href) return;
+
+		chrome.tabs.create({ url: href });
+		window.close();
 	}
 
 	// ─── Save form ────────────────────────────────────────────────────────────
@@ -956,23 +1500,9 @@ class LinkPocketApp {
 		const select = document.getElementById("portfolioSelect");
 		if (!select) return;
 
-		select.addEventListener("change", async () => {
-			const id = parseInt(select.value, 10);
-			if (!id || id === this.selectedPortfolioId) return;
-
-			this.selectedPortfolioId = id;
-			this.cacheSession({ selectedPortfolioId: id });
-
-			// A folder lives in exactly one portfolio: drop a selection that
-			// falls out of scope when the user switches portfolios.
-			if (this.selectedFolder && this.selectedFolder.portfolio_id !== id) {
-				this.selectedFolder = null;
-				this.renderSelectedFolder();
-			}
-
-			await this.fetchFolders();
-			this.renderFolderList(document.getElementById("folderSearch")?.value || "");
-		});
+		// Same handler as the global switcher, so the form and the rest of the
+		// popup can never end up pointing at different libraries.
+		select.addEventListener("change", () => this.selectPortfolio(parseInt(select.value, 10)));
 
 		this.renderPortfolioSelect();
 	}
@@ -1273,9 +1803,10 @@ class LinkPocketApp {
 				await this.fetchPortfolios();
 				await Promise.all([this.fetchTags(), this.fetchFolders(), this.fetchAiPlan()]);
 				this.setupPickers();
-				this.switchTab("save");
+				this.switchTab("home");
 				this.focusSearch();
-				if (this.settings.autoGetSelection) await this.autoFillCurrentTab();
+				await this.loadCurrentTab();
+				await this.loadHome({ force: true });
 				this.showToast(this.t("connectedSuccess") || "Connected!");
 			} catch (err) {
 				this.showToast(err.message || this.t("invalidCredentials") || "Invalid credentials", "error");
@@ -1321,12 +1852,51 @@ class LinkPocketApp {
 			});
 		});
 
+		// ── Save the page the user is on (home, and library when home is off) ──
+		const addCurrent = () => {
+			if (!this.currentTab) return;
+			// Fill the form even when auto-fill is off: the intent is explicit here.
+			this.autoFillCurrentTab();
+			this.switchTab("save");
+			this.focusElement("linkTitle");
+		};
+		document.getElementById("addCurrentBtn").addEventListener("click", addCurrent);
+		document.getElementById("libraryAddCurrentBtn").addEventListener("click", addCurrent);
+
+		// ── Library switcher ──
+		document.getElementById("globalPortfolioSelect").addEventListener("change", (e) => {
+			this.selectPortfolio(parseInt(e.target.value, 10));
+		});
+
+		// ── Library: collapse / expand a folder ──
+		document.getElementById("linksList").addEventListener("click", (e) => {
+			const head = e.target.closest(".folder-head");
+			if (head) this.toggleFolderGroup(head);
+		});
+
+		// ── Home: "see all" jumps to the matching library filter ──
+		document.getElementById("homePanel").addEventListener("click", (e) => {
+			const more = e.target.closest("[data-goto-filter]");
+			if (!more) return;
+
+			const filter = more.dataset.gotoFilter;
+			document.querySelectorAll("#filterChips .chip").forEach((chip) => {
+				chip.classList.toggle("active", chip.dataset.filter === filter);
+			});
+			this.linksFilter = filter;
+			this.linksLoaded = false;
+			this.switchTab("library");
+		});
+
 		// ── Settings from dropdown ──
 		document.getElementById("settingsMenuBtn").addEventListener("click", () => {
 			document.getElementById("userDropdown").classList.add("hidden");
 			document.getElementById("languageSelect").value = this.settings.language || "en";
 			document.getElementById("themeSelect").value = this.settings.theme || "dark";
 			document.getElementById("autoGetSelection").checked = this.settings.autoGetSelection !== false;
+			document.getElementById("recentCountSelect").value = String(this.settings.recentCount);
+			document.getElementById("favoritesCountSelect").value = String(this.settings.favoritesCount);
+			this.closePalette();
 			this.showScreen("settingsScreen");
 		});
 
@@ -1338,9 +1908,20 @@ class LinkPocketApp {
 			this.settings.language = document.getElementById("languageSelect").value;
 			this.settings.theme = document.getElementById("themeSelect").value;
 			this.settings.autoGetSelection = document.getElementById("autoGetSelection").checked;
+			this.settings.recentCount = this.normalizeSectionSize(document.getElementById("recentCountSelect").value);
+			this.settings.favoritesCount = this.normalizeSectionSize(document.getElementById("favoritesCountSelect").value);
+
 			await this.saveSettings();
 			this.applyTheme();
 			this.applyLanguage();
+			// Re-render the current-site card: applyLanguage() only touches
+			// static [data-i18n] nodes, not text written from JS.
+			this.renderCurrentSiteCard();
+
+			// A bigger section may need rows the last fetch did not bring back
+			this.homeLoaded = false;
+			await this.loadHome();
+
 			this.showToast(this.t("settingsSaved") || "Settings saved");
 		});
 
@@ -1410,8 +1991,9 @@ class LinkPocketApp {
 				this.showToast(this.t("linkSaved") || "Link saved!");
 				this.resetSaveForm();
 
-				// Reload library next time
+				// The new link belongs at the top of both lists
 				this.linksLoaded = false;
+				this.homeLoaded = false;
 			} catch (err) {
 				if (err.status === 401) {
 					await this.forgetSession();
@@ -1427,44 +2009,80 @@ class LinkPocketApp {
 			}
 		});
 
-		// ── Global search (always visible, drives the library tab) ──
+		// ── Global search — command palette ──
 		const searchInput = document.getElementById("globalSearchInput");
 		const clearBtn = document.getElementById("globalSearchClear");
+		const palette = document.getElementById("commandPalette");
 		let debounce;
-
-		const runSearch = async (query) => {
-			this.linksSearchQuery = query;
-			this.linksLoaded = false;
-			if (this.activeTab !== "library") this.switchTab("library");
-			else await this.loadLibrary();
-		};
 
 		searchInput.addEventListener("input", () => {
 			const val = searchInput.value.trim();
 			clearBtn.classList.toggle("hidden", !val);
 			clearTimeout(debounce);
-			debounce = setTimeout(() => runSearch(val), 350);
+
+			if (!val) {
+				this.closePalette();
+				return;
+			}
+			debounce = setTimeout(() => this.runPaletteSearch(val), 250);
 		});
 
 		searchInput.addEventListener("keydown", (e) => {
+			// Arrows and Enter belong to the palette as soon as it is open;
+			// otherwise Enter just runs the search immediately.
+			if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+				if (!this.paletteOpen) return;
+				e.preventDefault();
+				this.movePaletteSelection(e.key === "ArrowDown" ? 1 : -1);
+				return;
+			}
+
 			if (e.key === "Enter") {
 				e.preventDefault();
 				clearTimeout(debounce);
-				runSearch(searchInput.value.trim());
-			} else if (e.key === "Escape" && searchInput.value) {
-				e.preventDefault();
-				clearBtn.click();
+				if (this.paletteOpen && this.paletteIndex >= 0) {
+					this.openPaletteSelection();
+				} else if (searchInput.value.trim()) {
+					this.runPaletteSearch(searchInput.value.trim());
+				}
+				return;
 			}
+
+			if (e.key === "Escape") {
+				e.preventDefault();
+				if (this.paletteOpen) this.closePalette();
+				else if (searchInput.value) clearBtn.click();
+			}
+		});
+
+		palette.addEventListener("click", (e) => {
+			const item = e.target.closest(".palette-item");
+			if (!item) return;
+			this.paletteIndex = parseInt(item.dataset.index, 10);
+			this.openPaletteSelection();
+		});
+
+		// Hovering must move the keyboard cursor too, or Enter would open a
+		// different row than the one under the pointer.
+		palette.addEventListener("mousemove", (e) => {
+			const item = e.target.closest(".palette-item");
+			if (!item) return;
+			const index = parseInt(item.dataset.index, 10);
+			if (index === this.paletteIndex) return;
+			this.paletteIndex = index;
+			this.renderPalette();
+		});
+
+		document.addEventListener("click", (e) => {
+			if (!e.target.closest(".search-toolbar")) this.closePalette();
 		});
 
 		clearBtn.addEventListener("click", () => {
 			clearTimeout(debounce);
 			searchInput.value = "";
 			clearBtn.classList.add("hidden");
-			this.linksSearchQuery = "";
-			this.linksLoaded = false;
+			this.closePalette();
 			this.focusSearch();
-			if (this.activeTab === "library") this.loadLibrary();
 		});
 
 		// ── Connection banner ──

@@ -120,8 +120,7 @@
 					</button>
 					<button
 						id="userMenuBtn"
-						class="user-avatar-btn"
-						id="userAvatar">
+						class="user-avatar-btn">
 						<span id="userInitial">U</span>
 					</button>
 				</div>
@@ -195,7 +194,7 @@
 				</button>
 			</div>
 
-			<!-- Global search (drives the library tab) -->
+			<!-- Global search — opens the command palette -->
 			<div class="search-toolbar">
 				<div class="search-wrap">
 					<span class="material-symbols-outlined search-icon">search</span>
@@ -205,7 +204,11 @@
 						data-i18n-placeholder="searchLinksPlaceholder"
 						placeholder="Search your links..."
 						autocomplete="off"
-						spellcheck="false" />
+						spellcheck="false"
+						role="combobox"
+						aria-expanded="false"
+						aria-controls="paletteResults"
+						aria-autocomplete="list" />
 					<button
 						class="search-clear hidden"
 						id="globalSearchClear"
@@ -213,14 +216,135 @@
 						<span class="material-symbols-outlined">close</span>
 					</button>
 				</div>
+
+				<!-- Command palette: results overlay driven by the search field -->
+				<div
+					id="commandPalette"
+					class="command-palette hidden">
+					<div
+						class="palette-results"
+						id="paletteResults"
+						role="listbox"></div>
+					<div class="palette-footer">
+						<span class="palette-keys">
+							<kbd>↑</kbd><kbd>↓</kbd>
+							<span data-i18n="paletteHint">navigate</span>
+						</span>
+						<span class="palette-keys">
+							<kbd>↵</kbd>
+							<span data-i18n="paletteHintOpen">open</span>
+						</span>
+						<span class="palette-keys">
+							<kbd>esc</kbd>
+						</span>
+					</div>
+				</div>
+			</div>
+
+			<!-- Library switcher — shared by the home and library tabs,
+			     shown only when the account has more than one library -->
+			<div
+				class="portfolio-bar hidden"
+				id="portfolioBar">
+				<span class="material-symbols-outlined portfolio-bar-icon">library_books</span>
+				<select id="globalPortfolioSelect"></select>
+				<span class="material-symbols-outlined picker-arrow">expand_more</span>
 			</div>
 
 			<!-- Tab Panels -->
 			<main class="app-main">
+				<!-- ── HOME TAB ── -->
+				<div
+					id="homePanel"
+					class="panel active">
+					<div class="panel-scroll home-scroll">
+						<!-- Add the page the user is currently on -->
+						<button
+							type="button"
+							id="addCurrentBtn"
+							class="add-current-card">
+							<span class="add-current-favicon">
+								<img
+									id="addCurrentFavicon"
+									src=""
+									alt=""
+									onerror="
+										this.style.display = 'none';
+										this.nextElementSibling.style.display = 'flex';
+									" />
+								<span
+									class="favicon-fallback"
+									style="display: none"
+									>🌐</span
+								>
+							</span>
+							<span class="add-current-text">
+								<span
+									class="add-current-label"
+									data-i18n="addCurrentSite"
+									>Add current site</span
+								>
+								<span
+									class="add-current-url"
+									id="addCurrentUrl"
+									>—</span
+								>
+							</span>
+							<span class="material-symbols-outlined add-current-icon">add_circle</span>
+						</button>
+
+						<!-- Recently saved links -->
+						<section
+							class="home-section hidden"
+							id="homeRecentSection">
+							<div class="home-section-head">
+								<span
+									class="home-section-title"
+									data-i18n="recent"
+									>Recent</span
+								>
+								<button
+									type="button"
+									class="home-section-more"
+									data-goto-filter="recent">
+									<span data-i18n="seeAll">See all</span>
+									<span class="material-symbols-outlined">chevron_right</span>
+								</button>
+							</div>
+							<div
+								class="links-list home-list"
+								id="homeRecentList"></div>
+						</section>
+
+						<!-- Favorites -->
+						<section
+							class="home-section hidden"
+							id="homeFavoritesSection">
+							<div class="home-section-head">
+								<span
+									class="home-section-title"
+									data-i18n="favorites"
+									>Favorites</span
+								>
+								<button
+									type="button"
+									class="home-section-more"
+									data-goto-filter="favorites">
+									<span data-i18n="seeAll">See all</span>
+									<span class="material-symbols-outlined">chevron_right</span>
+								</button>
+							</div>
+							<div
+								class="links-list home-list"
+								id="homeFavoritesList"></div>
+						</section>
+					</div>
+				</div>
+
 				<!-- ── SAVE TAB ── -->
 				<div
 					id="savePanel"
-					class="panel active">
+					class="panel hidden">
 					<div class="panel-scroll">
 						<!-- Current page preview -->
 						<div
@@ -423,6 +547,42 @@
 				<div
 					id="libraryPanel"
 					class="panel hidden">
+					<!-- Shown only when the home tab is disabled, so saving the
+					     current page stays one click away -->
+					<button
+						type="button"
+						id="libraryAddCurrentBtn"
+						class="add-current-card library-add-current hidden">
+						<span class="add-current-favicon">
+							<img
+								id="libraryAddCurrentFavicon"
+								src=""
+								alt=""
+								onerror="
+									this.style.display = 'none';
+									this.nextElementSibling.style.display = 'flex';
+								" />
+							<span
+								class="favicon-fallback"
+								style="display: none"
+								>🌐</span
+							>
+						</span>
+						<span class="add-current-text">
+							<span
+								class="add-current-label"
+								data-i18n="addCurrentSite"
+								>Add current site</span
+							>
+							<span
+								class="add-current-url"
+								id="libraryAddCurrentUrl"
+								>—</span
+							>
+						</span>
+						<span class="material-symbols-outlined add-current-icon">add_circle</span>
+					</button>
+
 					<!-- Filter chips -->
 					<div
 						class="filter-chips"
@@ -466,7 +626,7 @@
 						id="libraryFooter"
 						style="display: none">
 						<a
-							href="https://linkpocket.app"
+							href="https://linkpocket.app/dashboard"
 							target="_blank"
 							class="open-full-app">
 							<span data-i18n="openFullApp">Open full app</span>
@@ -480,6 +640,13 @@
 			<nav class="bottom-nav">
 				<button
 					class="nav-item active"
+					data-tab="home"
+					id="navHome">
+					<span class="material-symbols-outlined">home</span>
+					<span data-i18n="home">Home</span>
+				</button>
+				<button
+					class="nav-item"
 					data-tab="save"
 					id="navSave">
 					<span class="material-symbols-outlined">bookmark_add</span>
@@ -561,6 +728,70 @@
 							</div>
 						</label>
 					</div>
+				</div>
+
+				<div class="settings-section">
+					<div
+						class="settings-label"
+						data-i18n="homeScreen">
+						Home screen
+					</div>
+
+					<div class="settings-row count-row">
+						<span class="material-symbols-outlined settings-row-icon">history</span>
+						<label
+							class="count-label"
+							for="recentCountSelect"
+							data-i18n="recent"
+							>Recent</label
+						>
+						<select
+							id="recentCountSelect"
+							class="count-select">
+							<option value="0">0</option>
+							<option value="1">1</option>
+							<option value="2">2</option>
+							<option value="3">3</option>
+							<option value="4">4</option>
+							<option value="5">5</option>
+							<option value="6">6</option>
+							<option value="7">7</option>
+							<option value="8">8</option>
+							<option value="9">9</option>
+							<option value="10">10</option>
+						</select>
+					</div>
+
+					<div class="settings-row count-row">
+						<span class="material-symbols-outlined settings-row-icon">bookmark</span>
+						<label
+							class="count-label"
+							for="favoritesCountSelect"
+							data-i18n="favorites"
+							>Favorites</label
+						>
+						<select
+							id="favoritesCountSelect"
+							class="count-select">
+							<option value="0">0</option>
+							<option value="1">1</option>
+							<option value="2">2</option>
+							<option value="3">3</option>
+							<option value="4">4</option>
+							<option value="5">5</option>
+							<option value="6">6</option>
+							<option value="7">7</option>
+							<option value="8">8</option>
+							<option value="9">9</option>
+							<option value="10">10</option>
+						</select>
+					</div>
+
+					<p
+						class="settings-hint"
+						data-i18n="homeCountHint">
+						Set both to 0 to open straight on the library.
+					</p>
 				</div>
 
 				<div class="settings-section">

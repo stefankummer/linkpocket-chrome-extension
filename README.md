@@ -34,11 +34,77 @@ Cause connue restante : `Api/ExtensionAuthController::login()` supprime les jeto
 `chrome-extension` existants, donc une connexion depuis un autre navigateur
 déconnecte les autres installations.
 
-## Recherche
+## Onglets
 
-La barre de recherche du haut est globale : elle prend le focus à l'ouverture du
-popup et à chaque passage sur l'onglet Bibliothèque, et bascule automatiquement
-sur cet onglet dès qu'on tape.
+Trois onglets dans la barre du bas : **Accueil**, **Sauvegarder**, **Bibliothèque**.
+Le popup ouvre sur Accueil — sauf quand celui-ci n'a rien à montrer (voir plus bas).
+
+## Écran d'accueil
+
+En haut, le bouton **Ajouter le site actuel** remplit le formulaire avec l'onglet
+courant et bascule sur Sauvegarder. Il est désactivé sur les pages non
+enregistrables (`chrome://`, `about:`, tout ce qui n'est pas `http(s)`).
+
+En dessous, deux sections alimentées par `/api/links` : **Récents** (derniers liens
+enregistrés) et **Favoris**. Chacune se dimensionne dans les réglages par un
+dropdown de 0 à 10 ; **0 masque la section** et n'émet aucune requête. Les deux
+listes sont mises en cache (`cachedHomeRecent`, `cachedHomeFavorites`) pour
+s'afficher avant la réponse du réseau. « Voir tout » ouvre la Bibliothèque sur le
+filtre correspondant.
+
+Quand les deux compteurs valent 0, ou que les deux sections reviennent vides,
+l'onglet Accueil est **retiré de la barre** et le popup ouvre sur Bibliothèque, où
+le bouton « Ajouter le site actuel » réapparaît. La décision n'est prise qu'une
+fois les données chargées : un démarrage à froid ne doit pas être lu comme un
+accueil vide.
+
+## Bibliothèques multiples
+
+Un sélecteur apparaît sous la recherche **dès qu'il y a plus d'une bibliothèque**,
+partagé par l'Accueil et la Bibliothèque (l'onglet Sauvegarder garde le sien dans
+le formulaire ; les deux passent par `selectPortfolio()`, donc ils ne peuvent pas
+diverger). La bibliothèque courante est persistée dans `chrome.storage.local`
+(`selectedPortfolioId`) et rouverte au lancement suivant. Avec une seule
+bibliothèque, aucun `portfolio_id` n'est envoyé — ce qui laisse remonter les liens
+enregistrés avant l'existence des bibliothèques.
+
+## Bibliothèque — accordéon par dossier
+
+Les liens sont groupés par dossier et imbriqués selon `parent_id`, chaque groupe
+étant repliable. Détails qui comptent :
+
+- un dossier vide, et dont aucun descendant ne contient de lien, n'est pas affiché ;
+- le compteur d'un dossier inclut tout son sous-arbre, pour rester utile une fois replié ;
+- un lien peut appartenir à plusieurs dossiers : il est listé sous chacun ;
+- un lien sans dossier connu ici tombe dans **Sans dossier**, ce qui garantit
+  qu'aucun lien n'est invisible ;
+- les dossiers **repliés** sont mémorisés (`collapsedFolders`) — on ne stocke que
+  les fermés, donc un dossier créé plus tard apparaît ouvert ;
+- la vue charge une page de 100 liens (`per_page`), suffisant pour grouper.
+
+## Recherche — palette de commande
+
+La barre du haut prend le focus à l'ouverture du popup. Dès qu'on tape, une palette
+s'ouvre en surcouche avec les 8 meilleurs résultats (`/api/links?search=`), le terme
+recherché surligné :
+
+- `↑` / `↓` déplacent la sélection (elle boucle) ;
+- `↵` ouvre le lien sélectionné dans un nouvel onglet et ferme le popup ;
+- `Échap` ferme la palette, une seconde fois vide le champ ;
+- survoler une ligne déplace aussi la sélection clavier, pour que `↵` ouvre
+  toujours ce qui est sous le curseur.
+
+Les réponses hors délai sont ignorées via un compteur de requête, donc une réponse
+lente ne peut pas écraser les résultats d'une frappe plus récente. La Bibliothèque
+n'est plus pilotée par ce champ : elle garde ses propres filtres Récents / Favoris.
+
+## Piège CSS
+
+Une classe `hidden` ajoutée en JS n'a d'effet que si une règle la couvre. Le fichier
+n'avait que des règles par composant (`.panel.hidden`, `.toast.hidden`…), si bien
+qu'un élément sans la sienne restait visible. Une règle générique `.hidden` clôt
+désormais `popup.css` — les règles par composant, plus spécifiques, continuent de
+primer. **Elle doit rester en dernier.**
 
 ## Icônes de dossier
 

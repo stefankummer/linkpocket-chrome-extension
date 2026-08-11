@@ -663,7 +663,10 @@ class LinkPocketApp {
 		hint.classList.toggle("hidden", !hasAiPlan);
 		if (!hasAiPlan) return;
 
-		const canUse = this.aiPlan.canUseAI;
+		// The whole save form is inert on a page that cannot be saved, and
+		// fetchAiPlan() resolves after loadCurrentTab() — without this the AI
+		// buttons would come back enabled inside a greyed-out form.
+		const canUse = this.aiPlan.canUseAI && !!this.currentTab;
 		descBtn.disabled = !canUse;
 		tagsBtn.disabled = !canUse;
 
@@ -960,6 +963,44 @@ class LinkPocketApp {
 			img.style.display = "";
 			img.nextElementSibling.style.display = "none";
 		}
+
+		this.renderSaveFormAvailability();
+	}
+
+	/**
+	 * The save tab exists to capture the page the user is on. On an internal
+	 * page there is nothing to capture, so the form is greyed out and the
+	 * preview card carries the same message as the home button — rather than
+	 * letting the user fill in a form that ends on "URL required".
+	 */
+	renderSaveFormAvailability() {
+		const savable = !!this.currentTab;
+		const card = document.getElementById("currentPageCard");
+		const title = document.getElementById("currentPageTitle");
+		const url = document.getElementById("currentPageUrl");
+		const form = document.getElementById("linkForm");
+		if (!card || !form) return;
+
+		card.classList.toggle("is-unavailable", !savable);
+		form.classList.toggle("form-disabled", !savable);
+
+		// Native controls stop responding; the custom pickers are divs, so the
+		// class above is what makes them inert.
+		form.querySelectorAll("input, textarea, select, button").forEach((el) => {
+			el.disabled = !savable;
+		});
+
+		if (!savable) {
+			title.textContent = this.t("currentSiteUnavailable");
+			url.textContent = this.t("currentSiteUnavailableHint");
+			const favicon = document.getElementById("currentFavicon");
+			favicon.style.display = "none";
+			favicon.nextElementSibling.style.display = "flex";
+			return;
+		}
+
+		// Re-enabling must not resurrect AI buttons the plan or quota forbids
+		this.updateAiUI();
 	}
 
 	autoFillCurrentTab() {

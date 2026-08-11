@@ -42,6 +42,7 @@ const LOCALES = {
         home: 'Home',
         addCurrentSite: 'Add current site',
         currentSiteUnavailable: 'This page cannot be saved',
+        currentSiteUnavailableHint: 'Open a web page to save it',
         seeAll: 'See all',
         uncategorized: 'No folder',
 
@@ -178,6 +179,7 @@ const LOCALES = {
         home: 'Accueil',
         addCurrentSite: 'Ajouter le site actuel',
         currentSiteUnavailable: 'Cette page ne peut pas être enregistrée',
+        currentSiteUnavailableHint: 'Ouvrez une page web pour l’enregistrer',
         seeAll: 'Voir tout',
         uncategorized: 'Sans dossier',
 
@@ -314,6 +316,7 @@ const LOCALES = {
         home: 'Start',
         addCurrentSite: 'Aktuelle Seite hinzufügen',
         currentSiteUnavailable: 'Diese Seite kann nicht gespeichert werden',
+        currentSiteUnavailableHint: 'Öffnen Sie eine Webseite, um sie zu speichern',
         seeAll: 'Alle anzeigen',
         uncategorized: 'Kein Ordner',
 

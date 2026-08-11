@@ -84,6 +84,20 @@ s'applique **à l'intérieur de chaque dossier** — l'ordre des dossiers vient 
 l'API, qui les trie déjà par nom. Ni Récents ni A-Z n'émettent de requête
 propre : ils réordonnent la même page côté client.
 
+## Onglet Sauvegarder — page non enregistrable
+
+Sur une page interne (`chrome://`, `about:`, tout ce qui n'est pas `http(s)`), il
+n'y a rien à capturer : la carte d'aperçu affiche le même message que le bouton
+d'accueil et **le formulaire est grisé et inerte**. `renderSaveFormAvailability()`
+pose `disabled` sur les contrôles natifs et `.form-disabled` sur le formulaire —
+cette classe coupe `pointer-events`, seul moyen de neutraliser les pickers de
+dossier et de tags, qui sont des `div`. Les boutons IA suivent le même état :
+`fetchAiPlan()` répond après `loadCurrentTab()` et les réactiverait sinon au
+milieu d'un formulaire grisé.
+
+Conséquence assumée : la saisie manuelle d'un lien est elle aussi bloquée sur ces
+pages.
+
 ## Ouverture des liens
 
 La préférence **Ouvrir les liens dans un nouvel onglet** (activée par défaut)

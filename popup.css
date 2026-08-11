@@ -2020,6 +2020,29 @@ kbd {
 }
 
 /* =========================================================
+   SAVE FORM — nothing to capture
+   =========================================================
+   On an internal page (chrome://, about:, …) there is no URL to save, so the
+   form is inert and the preview card says why. */
+.current-page-card.is-unavailable {
+    border-style: dashed;
+    border-color: var(--border-hover);
+    background: transparent;
+}
+
+.current-page-card.is-unavailable .current-page-title {
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.form-disabled {
+    opacity: 0.45;
+    /* The folder and tag pickers are divs — `disabled` means nothing to them */
+    pointer-events: none;
+    user-select: none;
+}
+
+/* =========================================================
    Utility — keep last
    =========================================================
    Every component used to ship its own `.component.hidden` rule, so any

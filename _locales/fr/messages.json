@@ -4,7 +4,7 @@
         "description": "Nom de l'extension"
     },
     "extensionDescription": {
-        "message": "Sauvegardez, organisez et recherchez vos liens depuis n'importe quel site.",
+        "message": "Ne perdez plus jamais un lien : sauvegardez, classez et retrouvez chaque page en un clic.",
         "description": "Description de l'extension"
     },
     "contextMenuSave": {

@@ -279,11 +279,7 @@
 								<img
 									id="addCurrentFavicon"
 									src=""
-									alt=""
-									onerror="
-										this.style.display = 'none';
-										this.nextElementSibling.style.display = 'flex';
-									" />
+									alt="" />
 								<span
 									class="favicon-fallback"
 									style="display: none"
@@ -366,11 +362,7 @@
 								<img
 									id="currentFavicon"
 									src=""
-									alt=""
-									onerror="
-										this.style.display = 'none';
-										this.nextElementSibling.style.display = 'flex';
-									" />
+									alt="" />
 								<div
 									class="favicon-fallback"
 									style="display: none">
@@ -569,11 +561,7 @@
 							<img
 								id="libraryAddCurrentFavicon"
 								src=""
-								alt=""
-								onerror="
-									this.style.display = 'none';
-									this.nextElementSibling.style.display = 'flex';
-								" />
+								alt="" />
 							<span
 								class="favicon-fallback"
 								style="display: none"
@@ -595,28 +583,59 @@
 						<span class="material-symbols-outlined add-current-icon">add_circle</span>
 					</button>
 
-					<!-- Filter chips -->
-					<div
-						class="filter-chips"
-						id="filterChips">
-						<button
-							class="chip active"
-							data-filter="recent"
-							data-i18n="recent">
-							Recent
-						</button>
-						<button
-							class="chip"
-							data-filter="favorites"
-							data-i18n="favorites">
-							Favorites
-						</button>
-						<button
-							class="chip"
-							data-filter="alpha"
-							data-i18n="sortAZ">
-							A-Z
-						</button>
+					<!-- Filter chips + sort order -->
+					<div class="library-toolbar">
+						<div
+							class="filter-chips"
+							id="filterChips">
+							<button
+								class="chip active"
+								data-filter="all"
+								data-i18n="filterAll">
+								All
+							</button>
+							<button
+								class="chip"
+								data-filter="recent"
+								data-i18n="recent">
+								Recent
+							</button>
+							<button
+								class="chip"
+								data-filter="favorites"
+								data-i18n="favorites">
+								Favorites
+							</button>
+						</div>
+						<div
+							class="sort-select-wrap"
+							id="sortSelectWrap">
+							<span class="material-symbols-outlined sort-icon">swap_vert</span>
+							<select
+								id="sortSelect"
+								data-i18n-title="sortBy">
+								<option
+									value="recent"
+									data-i18n="sortNewest">
+									Newest
+								</option>
+								<option
+									value="alpha"
+									data-i18n="sortAZ">
+									A-Z
+								</option>
+								<option
+									value="alphaDesc"
+									data-i18n="sortZA">
+									Z-A
+								</option>
+								<option
+									value="clicks"
+									data-i18n="sortMostVisited">
+									Most visited
+								</option>
+							</select>
+						</div>
 					</div>
 
 					<div

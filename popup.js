@@ -92,6 +92,9 @@ const DEFAULT_HOME_SECTION_SIZE = 5;
 /** One page of links is enough to group a library by folder. */
 const LIBRARY_PAGE_SIZE = 100;
 
+/** The "Recent" view is a flat timeline — beyond this it stops meaning "recent". */
+const RECENT_LINKS_LIMIT = 30;
+
 /** Group key for links that belong to no folder — never a real folder id. */
 const UNFILED_ID = "__unfiled__";
 
@@ -121,9 +124,12 @@ class LinkPocketApp {
 		this.aiPlan = null; // { plan, canUseAI, aiQuota } — AI buttons stay hidden until known
 		this.aiPlanError = null; // HTTP status of the last failed /plan call (404 = outdated API)
 
-		// Library state
+		// Library state. The filter picks *which* links are listed (all /
+		// recently saved / favorites); the sort picks their order — the two are
+		// independent, and both survive popup reopens via chrome.storage.local.
 		this.links = [];
-		this.linksFilter = "recent";
+		this.linksFilter = "all";
+		this.linksSort = "recent";
 		this.linksLoaded = false;
 		this.collapsedFolders = new Set();
 
@@ -234,7 +240,7 @@ class LinkPocketApp {
 	 */
 	async loadSession() {
 		return new Promise((resolve) => {
-			const keys = ["apiKey", "cachedUser", "cachedFolders", "cachedTags", "cachedPortfolios", "selectedPortfolioId", "cachedHomeRecent", "cachedHomeFavorites", "collapsedFolders"];
+			const keys = ["apiKey", "cachedUser", "cachedFolders", "cachedTags", "cachedPortfolios", "selectedPortfolioId", "cachedHomeRecent", "cachedHomeFavorites", "collapsedFolders", "libraryFilter", "librarySort"];
 			chrome.storage.local.get(keys, (data) => {
 				this.apiKey = data.apiKey || null;
 				this.user = data.cachedUser || null;
@@ -248,6 +254,9 @@ class LinkPocketApp {
 				// Folders are expanded by default: only the closed ones are stored,
 				// so a folder created later shows up open rather than hidden.
 				this.collapsedFolders = new Set(data.collapsedFolders || []);
+				// Restore the library view exactly as the user left it.
+				if (["all", "recent", "favorites"].includes(data.libraryFilter)) this.linksFilter = data.libraryFilter;
+				if (["recent", "alpha", "alphaDesc", "clicks"].includes(data.librarySort)) this.linksSort = data.librarySort;
 				resolve();
 			});
 		});
@@ -269,7 +278,7 @@ class LinkPocketApp {
 		this.apiKey = null;
 		this.user = null;
 		return new Promise((resolve) => {
-			chrome.storage.local.remove(["apiKey", "cachedUser", "cachedFolders", "cachedTags", "cachedPortfolios", "selectedPortfolioId", "cachedHomeRecent", "cachedHomeFavorites", "collapsedFolders"], resolve);
+			chrome.storage.local.remove(["apiKey", "cachedUser", "cachedFolders", "cachedTags", "cachedPortfolios", "selectedPortfolioId", "cachedHomeRecent", "cachedHomeFavorites", "collapsedFolders", "libraryFilter", "librarySort"], resolve);
 		});
 	}
 
@@ -286,6 +295,8 @@ class LinkPocketApp {
 					this.selectedTags = [];
 					this.selectedFolder = null;
 					this.links = [];
+					this.linksFilter = "all";
+					this.linksSort = "recent";
 					this.linksLoaded = false;
 					this.homeRecent = [];
 					this.homeFavorites = [];
@@ -566,6 +577,7 @@ class LinkPocketApp {
 		const hasCache = !!this.user;
 		this.updateUserUI();
 		this.showScreen("appScreen");
+		this.renderLibraryControls();
 		this.switchTab("home");
 		this.setupPickers();
 		if (!hasCache) this.showLoading();
@@ -1085,7 +1097,10 @@ class LinkPocketApp {
 		}
 
 		if (tab === "library") {
+			// Re-render even when loaded: the filter may have changed elsewhere
+			// (home "see all") since the list was last drawn.
 			if (!this.linksLoaded) this.loadLibrary();
+			else this.renderLinks(this.links);
 		}
 	}
 
@@ -1234,8 +1249,9 @@ class LinkPocketApp {
 		this.showLinksSkeleton(true);
 		try {
 			// Grouping by folder needs the whole library, not the first 24 rows.
-			// "recent" and "alpha" both list everything — they differ only in the
-			// order applied at render time, so neither needs its own query.
+			// "all" and "recent" share the same dataset — they differ only in
+			// how render time presents it. Only "favorites" narrows the query,
+			// so favorites older than the newest page are still found.
 			const params = this.scoped({ per_page: LIBRARY_PAGE_SIZE });
 			if (this.linksFilter === "favorites") params.favorite = 1;
 
@@ -1291,6 +1307,16 @@ class LinkPocketApp {
 		empty.style.display = "none";
 		footer.style.display = "";
 
+		// "Recent" is a flat timeline: folder groups would hide what arrived
+		// last. The cut keeps the N newest, then the sort picker orders them.
+		if (this.linksFilter === "recent") {
+			const newest = this.sortNewestFirst(links).slice(0, RECENT_LINKS_LIMIT);
+			const nodes = this.sortLinks(newest).map((link) => this.createLinkCard(link));
+			nodes.forEach((node) => list.insertBefore(node, empty));
+			list.style.opacity = "1";
+			return;
+		}
+
 		const { byFolder, orphans } = this.groupLinksByFolder(this.sortLinks(links));
 		const childrenOf = this.buildFolderTree();
 
@@ -1309,15 +1335,38 @@ class LinkPocketApp {
 		list.style.opacity = "1";
 	}
 
+	/** Newest-first regardless of the sort picker — used to define "recent". */
+	sortNewestFirst(links) {
+		const savedAt = (link) => new Date(link.created_at || 0).getTime();
+		return [...links].sort((a, b) => savedAt(b) - savedAt(a));
+	}
+
 	/**
-	 * "A-Z" sorts by title inside each folder; the other filters keep the order
-	 * the API returned, which is already newest-first.
+	 * Order the links according to the sort picker. Sorting is purely
+	 * client-side: the library fetch already holds every row, so changing the
+	 * order never costs a request.
 	 */
 	sortLinks(links) {
-		if (this.linksFilter !== "alpha") return links;
-
 		const collator = new Intl.Collator(this.currentLang, { sensitivity: "base", numeric: true });
-		return [...links].sort((a, b) => collator.compare(a.title || a.url || "", b.title || b.url || ""));
+		const byTitle = (a, b) => collator.compare(a.title || a.url || "", b.title || b.url || "");
+		const savedAt = (link) => new Date(link.created_at || 0).getTime();
+
+		const sorted = [...links];
+		switch (this.linksSort) {
+			case "alpha":
+				sorted.sort(byTitle);
+				break;
+			case "alphaDesc":
+				sorted.sort((a, b) => byTitle(b, a));
+				break;
+			case "clicks":
+				// Ties (never-opened links) stay newest-first
+				sorted.sort((a, b) => (b.click_count || 0) - (a.click_count || 0) || savedAt(b) - savedAt(a));
+				break;
+			default:
+				sorted.sort((a, b) => savedAt(b) - savedAt(a));
+		}
+		return sorted;
 	}
 
 	/**
@@ -1453,7 +1502,7 @@ class LinkPocketApp {
 
 		const faviconUrl = link.favicon_path || link.favicon;
 		const faviconHtml = faviconUrl
-			? `<img src="${this.escapeHtml(faviconUrl)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><span class="link-favicon-fallback" style="display:none">🌐</span>`
+			? `<img src="${this.escapeHtml(faviconUrl)}" alt="" /><span class="link-favicon-fallback" style="display:none">🌐</span>`
 			: `<span class="link-favicon-fallback">🌐</span>`;
 
 		const favIcon = link.is_favorite
@@ -1546,7 +1595,7 @@ class LinkPocketApp {
 
 				const faviconUrl = link.favicon_path || link.favicon;
 				const faviconHtml = faviconUrl
-					? `<img src="${this.escapeHtml(faviconUrl)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><span class="link-favicon-fallback" style="display:none">🌐</span>`
+					? `<img src="${this.escapeHtml(faviconUrl)}" alt="" /><span class="link-favicon-fallback" style="display:none">🌐</span>`
 					: `<span class="link-favicon-fallback">🌐</span>`;
 
 				item.innerHTML = `
@@ -1910,6 +1959,7 @@ class LinkPocketApp {
 				await this.fetchPortfolios();
 				await Promise.all([this.fetchTags(), this.fetchFolders(), this.fetchAiPlan()]);
 				this.setupPickers();
+				this.renderLibraryControls();
 				this.switchTab("home");
 				this.focusSearch();
 				await this.loadCurrentTab();
@@ -1997,11 +2047,12 @@ class LinkPocketApp {
 			if (!more) return;
 
 			const filter = more.dataset.gotoFilter;
-			document.querySelectorAll("#filterChips .chip").forEach((chip) => {
-				chip.classList.toggle("active", chip.dataset.filter === filter);
-			});
-			this.linksFilter = filter;
-			this.linksLoaded = false;
+			if (filter !== this.linksFilter) {
+				if (!this.datasetShared(this.linksFilter, filter)) this.linksLoaded = false;
+				this.linksFilter = filter;
+				this.cacheSession({ libraryFilter: this.linksFilter });
+				this.renderLibraryControls();
+			}
 			this.switchTab("library");
 		});
 
@@ -2212,13 +2263,60 @@ class LinkPocketApp {
 		// ── Library: filter chips ──
 		document.getElementById("filterChips").addEventListener("click", async (e) => {
 			const chip = e.target.closest(".chip");
-			if (!chip) return;
-			document.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
-			chip.classList.add("active");
+			if (!chip || chip.dataset.filter === this.linksFilter) return;
+
+			const sameDataset = this.datasetShared(this.linksFilter, chip.dataset.filter);
 			this.linksFilter = chip.dataset.filter;
+			this.cacheSession({ libraryFilter: this.linksFilter });
+			this.renderLibraryControls();
+
+			// "all" and "recent" share the same rows: switching between them is
+			// a pure re-render. Only entering/leaving "favorites" refetches.
+			if (sameDataset && this.linksLoaded) {
+				this.renderLinks(this.links);
+				return;
+			}
 			this.linksLoaded = false;
 			await this.loadLibrary();
 		});
+
+		// ── Library: sort order — client-side only, never refetches ──
+		document.getElementById("sortSelect").addEventListener("change", (e) => {
+			this.linksSort = e.target.value;
+			this.cacheSession({ librarySort: this.linksSort });
+			if (this.linksLoaded) this.renderLinks(this.links);
+		});
+
+		// ── CSP-safe favicon fallback ──
+		// MV3 forbids inline `onerror` attributes; error events do not bubble,
+		// so one capture-phase listener replaces every per-image handler.
+		document.addEventListener(
+			"error",
+			(e) => {
+				const img = e.target;
+				if (!(img instanceof HTMLImageElement)) return;
+				const fallback = img.nextElementSibling;
+				if (fallback && (fallback.classList.contains("favicon-fallback") || fallback.classList.contains("link-favicon-fallback"))) {
+					img.style.display = "none";
+					fallback.style.display = "flex";
+				}
+			},
+			true,
+		);
+	}
+
+	/** Two filters share their dataset when neither narrows the query. */
+	datasetShared(a, b) {
+		return a !== "favorites" && b !== "favorites";
+	}
+
+	/** Reflect the stored filter + sort into the library toolbar controls. */
+	renderLibraryControls() {
+		document.querySelectorAll("#filterChips .chip").forEach((chip) => {
+			chip.classList.toggle("active", chip.dataset.filter === this.linksFilter);
+		});
+		const sortSelect = document.getElementById("sortSelect");
+		if (sortSelect) sortSelect.value = this.linksSort;
 	}
 }
 

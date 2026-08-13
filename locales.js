@@ -36,7 +36,12 @@ const LOCALES = {
         quickSave: 'Quick Save',
         recent: 'Recent',
         favorites: 'Favorites',
+        filterAll: 'All',
+        sortBy: 'Sort by',
+        sortNewest: 'Newest',
         sortAZ: 'A-Z',
+        sortZA: 'Z-A',
+        sortMostVisited: 'Most visited',
 
         // Home screen
         home: 'Home',
@@ -173,7 +178,12 @@ const LOCALES = {
         quickSave: 'Sauvegarde rapide',
         recent: 'Récents',
         favorites: 'Favoris',
+        filterAll: 'Tous',
+        sortBy: 'Trier par',
+        sortNewest: 'Plus récents',
         sortAZ: 'A-Z',
+        sortZA: 'Z-A',
+        sortMostVisited: 'Plus consultés',
 
         // Home screen
         home: 'Accueil',
@@ -310,7 +320,12 @@ const LOCALES = {
         quickSave: 'Schnellspeichern',
         recent: 'Letzte',
         favorites: 'Favoriten',
+        filterAll: 'Alle',
+        sortBy: 'Sortieren nach',
+        sortNewest: 'Neueste',
         sortAZ: 'A-Z',
+        sortZA: 'Z-A',
+        sortMostVisited: 'Meist besucht',
 
         // Home screen
         home: 'Start',

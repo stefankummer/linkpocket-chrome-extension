@@ -394,8 +394,21 @@ class LinkPocketApp {
 		throw lastError;
 	}
 
+	/**
+	 * Stable per-install identifier, so the API scopes the token to this
+	 * browser: logging in elsewhere no longer revokes this session.
+	 */
+	async getDeviceId() {
+		const { deviceId } = await chrome.storage.local.get(["deviceId"]);
+		if (deviceId) return deviceId;
+		const fresh = crypto.randomUUID();
+		await chrome.storage.local.set({ deviceId: fresh });
+		return fresh;
+	}
+
 	async login(email, password) {
-		return this.httpRequest("/extension/login", { method: "POST", body: { email, password }, auth: false }, 15000);
+		const deviceId = await this.getDeviceId();
+		return this.httpRequest("/extension/login", { method: "POST", body: { email, password, device_id: deviceId }, auth: false }, 15000);
 	}
 
 	async fetchUser() {

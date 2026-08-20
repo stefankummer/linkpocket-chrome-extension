@@ -30,9 +30,11 @@ Règles :
 - Chaque requête a un timeout de 12 s et jusqu'à 2 nouvelles tentatives avec
   backoff exponentiel sur les erreurs transitoires (réseau, `429`, `5xx`).
 
-Cause connue restante : `Api/ExtensionAuthController::login()` supprime les jetons
-`chrome-extension` existants, donc une connexion depuis un autre navigateur
-déconnecte les autres installations.
+Le login envoie un `device_id` stable (`crypto.randomUUID`, stocké dans
+`chrome.storage.local`, il survit au logout). L'API nomme le jeton
+`chrome-extension:<device_id>` et ne remplace que le jeton du même appareil :
+une connexion depuis un autre navigateur ne déconnecte plus les autres
+installations. Les jetons Sanctum n'expirent pas côté serveur.
 
 ## Onglets
 

@@ -2177,6 +2177,9 @@ class LinkPocketApp {
 				// The new link belongs at the top of both lists
 				this.linksLoaded = false;
 				this.homeLoaded = false;
+
+				// Job done: close the popup once the toast has been seen
+				setTimeout(() => window.close(), 900);
 			} catch (err) {
 				if (err.status === 401) {
 					await this.forgetSession();

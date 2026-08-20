@@ -7,25 +7,34 @@ const DEFAULT_SETTINGS = {
 
 // Create context menus on install and on every browser start — the service
 // worker is torn down aggressively, so menus must be (re)declared idempotently.
+// onInstalled and onStartup can fire back-to-back and the storage read below is
+// async, so runs must be serialized or both end up creating duplicate ids.
+let menuSetupQueue = Promise.resolve();
 function setupContextMenus() {
-    chrome.contextMenus.removeAll(async () => {
-        const { apiKey } = await chrome.storage.local.get(['apiKey']);
-        const enabled = !!apiKey;
+    menuSetupQueue = menuSetupQueue.then(() => new Promise((resolve) => {
+        chrome.contextMenus.removeAll(async () => {
+            const { apiKey } = await chrome.storage.local.get(['apiKey']);
+            const enabled = !!apiKey;
+            // Reading lastError keeps a lost race from surfacing as "Unchecked runtime.lastError"
+            const swallowError = () => void chrome.runtime.lastError;
 
-        chrome.contextMenus.create({
-            id: 'saveToLinkPocket',
-            title: chrome.i18n.getMessage('contextMenuSave'),
-            contexts: ['page', 'link'],
-            enabled: enabled,
-        });
+            chrome.contextMenus.create({
+                id: 'saveToLinkPocket',
+                title: chrome.i18n.getMessage('contextMenuSave'),
+                contexts: ['page', 'link'],
+                enabled: enabled,
+            }, swallowError);
 
-        chrome.contextMenus.create({
-            id: 'quickSaveToLinkPocket',
-            title: chrome.i18n.getMessage('contextMenuQuickSave'),
-            contexts: ['page', 'link'],
-            enabled: enabled,
+            chrome.contextMenus.create({
+                id: 'quickSaveToLinkPocket',
+                title: chrome.i18n.getMessage('contextMenuQuickSave'),
+                contexts: ['page', 'link'],
+                enabled: enabled,
+            }, swallowError);
+
+            resolve();
         });
-    });
+    }));
 }
 
 chrome.runtime.onInstalled.addListener(setupContextMenus);

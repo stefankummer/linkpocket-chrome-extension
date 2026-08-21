@@ -82,6 +82,25 @@ const FOLDER_ICON_KEYWORDS = [
 	[/map|globe|world|compass|pin/, "public"],
 ];
 
+/**
+ * Ligatures available in the bundled Material Symbols subset font
+ * (fonts/FONT_SUBSET.md). The full CDN font is no longer loaded, so any
+ * ligature outside this set would render as raw text — resolveFolderIcon
+ * routes unknown names through the keyword fallback instead.
+ */
+const BUNDLED_MATERIAL_ICONS = new Set([
+	"add", "add_circle", "arrow_back", "auto_awesome", "auto_fix_high",
+	"bookmark", "bookmark_add", "check", "check_circle", "chevron_right",
+	"close", "cloud", "cloud_off", "code", "contrast", "create_new_folder",
+	"delete_sweep", "error", "expand_more", "folder", "folder_off",
+	"folder_open", "folder_shared", "folder_special", "headphones", "history",
+	"home", "image", "keyboard", "language", "library_books", "link_off",
+	"lock", "login", "logout", "mail", "manage_accounts", "menu_book",
+	"movie", "music_note", "open_in_new", "photo_library", "public", "search",
+	"sell", "shopping_cart", "sports_esports", "swap_vert", "sync", "tune",
+	"work",
+]);
+
 /** Default production API — overridable from the settings screen (EXT-32). */
 const DEFAULT_API_ENDPOINT = "https://linkpocket.app/api";
 
@@ -544,8 +563,11 @@ class LinkPocketApp {
 		// Anything with non-ASCII characters is an emoji icon
 		if (!/^[\x20-\x7E]+$/.test(name)) return { type: "emoji", value: name };
 
-		// Material Symbols ligature (classic theme)
-		if (/^[a-z][a-z0-9_]*$/.test(name)) return { type: "material", value: name };
+		// Material Symbols ligature (classic theme) — only bundled icons can
+		// render; anything else goes through the keyword fallback.
+		if (/^[a-z][a-z0-9_]*$/.test(name)) {
+			return { type: "material", value: BUNDLED_MATERIAL_ICONS.has(name) ? name : this.materialEquivalent(name) };
+		}
 
 		// Icon-font class from another theme → closest Material equivalent
 		return { type: "material", value: this.materialEquivalent(name) };

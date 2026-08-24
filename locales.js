@@ -104,6 +104,29 @@ const LOCALES = {
         clearDataHint:
             'This only removes local data and disconnects the extension. Your LinkPocket account is not affected.',
 
+        // Context menu
+        contextMenuSection: 'Context menu',
+        showInContextMenu: 'Show LinkPocket in the right-click menu',
+        contextMenuSave: 'Save to LinkPocket',
+        contextMenuQuickSave: 'Quick save to LinkPocket',
+
+        // Quick save destination
+        quickSaveDestination: 'Quick save destination',
+        quickSaveDestinationHint:
+            'Where the quick save files links, both from the context menu and from the keyboard shortcut.',
+
+        // Shortcuts
+        shortcutsManagedByBrowser:
+            'Shortcuts are managed in your browser settings. :open currently opens LinkPocket and :quick runs the quick save.',
+        shortcutNotSet: 'not set',
+        openBrowserShortcuts: 'Browser shortcuts',
+
+        // Notifications (service worker)
+        notificationSaved: 'Link saved successfully!',
+        notificationFailed: 'Failed to save the link',
+        notificationConnect: 'Please connect to LinkPocket first',
+        notificationOpenPopup: 'Open LinkPocket to finish saving this link',
+
         // Multi-select
         create: 'Create',
         noItemsFound: 'No items found',
@@ -245,6 +268,29 @@ const LOCALES = {
             'Êtes-vous sûr de vouloir effacer toutes les données ? Cela vous déconnectera et réinitialisera tous les paramètres.',
         clearDataHint:
             "Cela supprime uniquement les données locales et déconnecte l'extension. Votre compte LinkPocket n'est pas affecté.",
+
+        // Context menu
+        contextMenuSection: 'Menu contextuel',
+        showInContextMenu: 'Afficher LinkPocket dans le menu clic droit',
+        contextMenuSave: 'Sauvegarder dans LinkPocket',
+        contextMenuQuickSave: 'Sauvegarde rapide dans LinkPocket',
+
+        // Quick save destination
+        quickSaveDestination: 'Destination de la sauvegarde rapide',
+        quickSaveDestinationHint:
+            'Où la sauvegarde rapide classe les liens, depuis le menu contextuel comme depuis le raccourci clavier.',
+
+        // Shortcuts
+        shortcutsManagedByBrowser:
+            'Les raccourcis sont gérés dans les paramètres du navigateur. Actuellement :open pour ouvrir LinkPocket et :quick pour la sauvegarde rapide sont utilisés.',
+        shortcutNotSet: 'non défini',
+        openBrowserShortcuts: 'Raccourcis du navigateur',
+
+        // Notifications (service worker)
+        notificationSaved: 'Lien enregistré avec succès !',
+        notificationFailed: "Échec de l'enregistrement du lien",
+        notificationConnect: "Veuillez d'abord vous connecter à LinkPocket",
+        notificationOpenPopup: "Ouvrez LinkPocket pour terminer l'enregistrement de ce lien",
 
         // Multi-select
         create: 'Créer',
@@ -388,6 +434,29 @@ const LOCALES = {
         clearDataHint:
             'Dies entfernt nur lokale Daten und trennt die Erweiterung. Ihr LinkPocket-Konto ist nicht betroffen.',
 
+        // Context menu
+        contextMenuSection: 'Kontextmenü',
+        showInContextMenu: 'LinkPocket im Rechtsklick-Menü anzeigen',
+        contextMenuSave: 'In LinkPocket speichern',
+        contextMenuQuickSave: 'Schnell in LinkPocket speichern',
+
+        // Quick save destination
+        quickSaveDestination: 'Ziel des Schnellspeicherns',
+        quickSaveDestinationHint:
+            'Wohin das Schnellspeichern Links ablegt — aus dem Kontextmenü wie über die Tastenkombination.',
+
+        // Shortcuts
+        shortcutsManagedByBrowser:
+            'Tastenkombinationen werden in den Browser-Einstellungen verwaltet. Derzeit öffnet :open LinkPocket und :quick startet das Schnellspeichern.',
+        shortcutNotSet: 'nicht festgelegt',
+        openBrowserShortcuts: 'Browser-Tastenkombinationen',
+
+        // Notifications (service worker)
+        notificationSaved: 'Link erfolgreich gespeichert!',
+        notificationFailed: 'Speichern des Links fehlgeschlagen',
+        notificationConnect: 'Bitte zuerst mit LinkPocket verbinden',
+        notificationOpenPopup: 'Öffnen Sie LinkPocket, um diesen Link zu speichern',
+
         // Multi-select
         create: 'Erstellen',
         noItemsFound: 'Keine Elemente gefunden',
@@ -428,9 +497,19 @@ const LOCALES = {
     },
 };
 
-// Detect browser language
+// Detect the browser language, used as the default until the user picks one.
+// chrome.i18n.getUILanguage() is the browser's own UI language and is available
+// in the service worker too, where `navigator.language` is the only fallback.
 function detectLanguage() {
-    const browserLang = navigator.language.split('-')[0];
+    let uiLang = '';
+    try {
+        uiLang = chrome?.i18n?.getUILanguage?.() || '';
+    } catch {
+        uiLang = '';
+    }
+    if (!uiLang && typeof navigator !== 'undefined') uiLang = navigator.language || '';
+
+    const browserLang = uiLang.toLowerCase().split('-')[0];
     return LOCALES[browserLang] ? browserLang : 'en';
 }
 

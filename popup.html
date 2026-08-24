@@ -775,6 +775,56 @@
 				<div class="settings-section">
 					<div
 						class="settings-label"
+						data-i18n="contextMenuSection">
+						Context menu
+					</div>
+					<div class="settings-row toggle-row">
+						<span class="material-symbols-outlined settings-row-icon">tune</span>
+						<label class="toggle-label">
+							<span data-i18n="showInContextMenu">Show LinkPocket in the right-click menu</span>
+							<div class="toggle-track">
+								<input
+									type="checkbox"
+									id="contextMenuSetting" />
+								<span class="toggle-thumb"></span>
+							</div>
+						</label>
+					</div>
+				</div>
+
+				<div class="settings-section">
+					<div
+						class="settings-label"
+						data-i18n="quickSaveDestination">
+						Quick save destination
+					</div>
+
+					<div
+						class="settings-row"
+						id="quickSavePortfolioRow">
+						<span class="material-symbols-outlined settings-row-icon">library_books</span>
+						<select
+							id="quickSavePortfolioSelect"
+							aria-label="Library"></select>
+					</div>
+
+					<div class="settings-row">
+						<span class="material-symbols-outlined settings-row-icon">folder_open</span>
+						<select
+							id="quickSaveFolderSelect"
+							aria-label="Folder"></select>
+					</div>
+
+					<p
+						class="settings-hint"
+						data-i18n="quickSaveDestinationHint">
+						Where the quick save files links.
+					</p>
+				</div>
+
+				<div class="settings-section">
+					<div
+						class="settings-label"
 						data-i18n="homeScreen">
 						Home screen
 					</div>
@@ -844,14 +894,18 @@
 					</div>
 					<div class="settings-row shortcut-row">
 						<span class="material-symbols-outlined settings-row-icon">keyboard</span>
-						<kbd id="currentShortcut">Alt + Shift + S</kbd>
 						<button
 							id="shortcutsBtn"
 							class="btn-ghost-sm"
-							data-i18n="changeShortcut">
-							Change
+							data-i18n="openBrowserShortcuts">
+							Browser shortcuts
 						</button>
 					</div>
+					<p
+						class="settings-hint"
+						id="shortcutHint">
+						Shortcuts are managed in your browser settings.
+					</p>
 				</div>
 
 				<button

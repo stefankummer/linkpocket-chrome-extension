@@ -114,19 +114,48 @@ const LIBRARY_PAGE_SIZE = 100;
 /** The "Recent" view is a flat timeline — beyond this it stops meaning "recent". */
 const RECENT_LINKS_LIMIT = 30;
 
+/**
+ * How long a link parked by the context menu stays claimable. `openPopup()`
+ * can be refused (no user gesture on the popup's window), and a stale target
+ * must not hijack the next manual open days later.
+ */
+const PENDING_LINK_TTL = 60000;
+
 /** Group key for links that belong to no folder — never a real folder id. */
 const UNFILED_ID = "__unfiled__";
 
-/** Single source of truth so a reset restores exactly what a fresh install has. */
+/**
+ * Single source of truth so a reset restores exactly what a fresh install has.
+ * `language: null` means "follow the browser" — the value only becomes explicit
+ * once the user picks one in the settings screen.
+ */
 const DEFAULT_SETTINGS = {
 	apiEndpoint: DEFAULT_API_ENDPOINT,
 	autoGetSelection: true,
-	language: "en",
+	language: null,
 	theme: "dark",
 	openInNewTab: true,
 	recentCount: DEFAULT_HOME_SECTION_SIZE,
 	favoritesCount: DEFAULT_HOME_SECTION_SIZE,
+	contextMenuEnabled: true,
+	quickSavePortfolioId: null,
+	quickSaveFolderId: null,
 };
+
+/** Select values are strings; numeric ids go back to the API as numbers. */
+function asId(value) {
+	if (value === "" || value === null || value === undefined) return null;
+	return /^\d+$/.test(String(value)) ? Number(value) : value;
+}
+
+/** Per-browser location of the extension shortcuts page (Chromium forks differ). */
+function browserShortcutsUrl() {
+	const ua = navigator.userAgent || "";
+	if (/\bEdg[A-Z]?\//.test(ua)) return "edge://extensions/shortcuts";
+	if (/\bOPR\//.test(ua)) return "opera://extensions/shortcuts";
+	if (/\bVivaldi\//.test(ua)) return "vivaldi://extensions/shortcuts";
+	return "chrome://extensions/shortcuts";
+}
 
 class LinkPocketApp {
 	constructor() {
@@ -137,9 +166,15 @@ class LinkPocketApp {
 		this.folders = [];
 		this.portfolios = [];
 		this.selectedPortfolioId = null;
+		// Folders of the quick save library, which is not always the active one
+		this.quickSaveFolders = [];
+		// Destination being edited in the settings screen, committed on Save
+		this.quickSaveDraft = { portfolioId: null, folderId: null };
+		// Only a list that actually arrived can prove a stored folder is gone
+		this.quickSaveFoldersLoaded = false;
 		this.selectedTags = [];
 		this.selectedFolder = null;
-		this.currentLang = "en";
+		this.currentLang = typeof detectLanguage === "function" ? detectLanguage() : "en";
 		this.aiPlan = null; // { plan, canUseAI, aiQuota } — AI buttons stay hidden until known
 		this.aiPlanError = null; // HTTP status of the last failed /plan call (404 = outdated API)
 
@@ -161,6 +196,9 @@ class LinkPocketApp {
 
 		// Active browser tab, or null when it cannot be saved
 		this.currentTab = null;
+
+		// Link handed over by the "Save to LinkPocket" context menu entry
+		this.pendingLink = null;
 
 		// Command palette state
 		this.paletteOpen = false;
@@ -186,8 +224,28 @@ class LinkPocketApp {
 		this.applyTheme();
 		this.applyLanguage();
 		await this.loadSession();
+		// Read before the first render: it decides which tab the popup opens on
+		this.pendingLink = await this.consumePendingLink();
 		this.setupEventListeners();
 		this.checkAuthStatus();
+	}
+
+	/**
+	 * The "Save to LinkPocket" context menu entry parks its target in local
+	 * storage and opens the popup; claiming it here is what turns that click
+	 * into a prefilled save form instead of a plain home screen.
+	 */
+	async consumePendingLink() {
+		return new Promise((resolve) => {
+			chrome.storage.local.get(["pendingUrl", "pendingTitle", "pendingAt"], (data) => {
+				chrome.storage.local.remove(["pendingUrl", "pendingTitle", "pendingAt"]);
+
+				if (!data.pendingUrl) return resolve(null);
+				if (data.pendingAt && Date.now() - data.pendingAt > PENDING_LINK_TTL) return resolve(null);
+
+				resolve({ url: data.pendingUrl, title: data.pendingTitle || "" });
+			});
+		});
 	}
 
 	// ─── Localisation ─────────────────────────────────────────────────────────
@@ -197,7 +255,7 @@ class LinkPocketApp {
 	}
 
 	applyLanguage() {
-		this.currentLang = this.settings.language || "en";
+		this.currentLang = this.settings.language || (typeof detectLanguage === "function" ? detectLanguage() : "en");
 		document.querySelectorAll("[data-i18n]").forEach((el) => {
 			el.textContent = this.t(el.getAttribute("data-i18n"));
 		});
@@ -251,6 +309,142 @@ class LinkPocketApp {
 		return new Promise((resolve) => {
 			chrome.storage.sync.set({ settings: this.settings }, resolve);
 		});
+	}
+
+	// ─── Settings screen ─────────────────────────────────────────────────────
+
+	/** Fill every control from the live settings, then show the screen. */
+	async openSettings() {
+		document.getElementById("userDropdown").classList.add("hidden");
+		document.getElementById("languageSelect").value = this.settings.language || this.currentLang;
+		document.getElementById("themeSelect").value = this.settings.theme || "dark";
+		document.getElementById("autoGetSelection").checked = this.settings.autoGetSelection !== false;
+		document.getElementById("openInNewTabSetting").checked = this.settings.openInNewTab !== false;
+		document.getElementById("contextMenuSetting").checked = this.settings.contextMenuEnabled !== false;
+		document.getElementById("recentCountSelect").value = String(this.settings.recentCount);
+		document.getElementById("favoritesCountSelect").value = String(this.settings.favoritesCount);
+		this.closePalette();
+		this.showScreen("settingsScreen");
+		this.renderShortcutHint();
+
+		// The destination is only committed on Save, so the screen edits a draft
+		// rather than the live settings.
+		this.quickSaveDraft = {
+			portfolioId: this.resolvedQuickSavePortfolioId(),
+			folderId: this.settings.quickSaveFolderId ?? null,
+		};
+
+		// Draw from what is already known, then refine it once the folders of
+		// the target library are in — the screen must not wait on the network.
+		this.renderQuickSaveDestination();
+		await this.loadQuickSaveFolders(this.quickSaveDraft.portfolioId);
+		this.renderQuickSaveDestination();
+	}
+
+	/** The stored library, or the active one while nothing has been chosen. */
+	resolvedQuickSavePortfolioId() {
+		const stored = this.settings.quickSavePortfolioId;
+		if (stored && this.portfolios.some((p) => p.id == stored)) return stored;
+		return this.selectedPortfolioId;
+	}
+
+	/**
+	 * The quick save destination can point at a library other than the active
+	 * one, whose folders `this.folders` does not hold — fetch those separately.
+	 */
+	async loadQuickSaveFolders(portfolioId) {
+		this.quickSaveFoldersLoaded = false;
+
+		if (portfolioId && portfolioId == this.selectedPortfolioId) {
+			this.quickSaveFolders = this.folders;
+			this.quickSaveFoldersLoaded = true;
+			return;
+		}
+		if (!this.apiKey) {
+			this.quickSaveFolders = [];
+			return;
+		}
+
+		try {
+			const query = portfolioId ? `?portfolio_id=${encodeURIComponent(portfolioId)}` : "";
+			const res = await this.apiRequest(`/categories${query}`);
+			this.quickSaveFolders = res?.data || res || [];
+			this.quickSaveFoldersLoaded = true;
+		} catch {
+			// Unknown, not empty: leave the flag down so nothing gets cleared
+			this.quickSaveFolders = [];
+		}
+	}
+
+	/**
+	 * The quick save never opens the popup, so its destination is picked here
+	 * once: a library and, inside it, an optional folder.
+	 */
+	renderQuickSaveDestination() {
+		const portfolioRow = document.getElementById("quickSavePortfolioRow");
+		const portfolioSelect = document.getElementById("quickSavePortfolioSelect");
+		const folderSelect = document.getElementById("quickSaveFolderSelect");
+		if (!portfolioRow || !portfolioSelect || !folderSelect) return;
+
+		// Older deployments expose no portfolios: an empty picker helps nobody.
+		portfolioRow.classList.toggle("hidden", !this.portfolios.length);
+
+		portfolioSelect.innerHTML = this.portfolios.map((p) => `<option value="${this.escapeHtml(String(p.id))}">${this.escapeHtml(p.name)}</option>`).join("");
+		if (this.quickSaveDraft.portfolioId) portfolioSelect.value = String(this.quickSaveDraft.portfolioId);
+		// A library that no longer exists leaves the select on its first option:
+		// read the effective choice back so the draft cannot drift from it.
+		if (this.portfolios.length) this.quickSaveDraft.portfolioId = asId(portfolioSelect.value);
+
+		const folders = this.quickSaveFolders || [];
+		folderSelect.innerHTML = [`<option value="">${this.escapeHtml(this.t("noFolder"))}</option>`]
+			.concat(folders.map((f) => `<option value="${this.escapeHtml(String(f.id))}">${this.escapeHtml(f.name)}</option>`))
+			.join("");
+
+		// A folder deleted since the last visit — or one belonging to another
+		// library — must not stay selected in a list that no longer holds it.
+		// Only a list that actually loaded proves that: a fetch still in flight
+		// (or failed) must never silently clear the stored choice.
+		const draftFolder = this.quickSaveDraft.folderId;
+		const known = folders.some((f) => f.id == draftFolder);
+		folderSelect.value = draftFolder && known ? String(draftFolder) : "";
+		if (this.quickSaveFoldersLoaded && !known) this.quickSaveDraft.folderId = null;
+	}
+
+	/**
+	 * Shortcuts belong to the browser: state what is bound right now and link
+	 * out to the page that changes it — the extension never rebinds anything.
+	 */
+	renderShortcutHint() {
+		const hint = document.getElementById("shortcutHint");
+		if (!hint) return;
+
+		const write = (commands) => {
+			const shortcutFor = (name) => (commands || []).find((c) => c.name === name)?.shortcut || "";
+			const notSet = this.t("shortcutNotSet");
+			const bindings = {
+				":open": shortcutFor("_execute_action") || notSet,
+				":quick": shortcutFor("quick-save") || notSet,
+			};
+
+			// Each placeholder becomes a <kbd> so the binding stands out.
+			const nodes = this.t("shortcutsManagedByBrowser")
+				.split(/(:open|:quick)/)
+				.filter(Boolean)
+				.map((part) => {
+					if (!(part in bindings)) return document.createTextNode(part);
+					const kbd = document.createElement("kbd");
+					kbd.textContent = bindings[part];
+					return kbd;
+				});
+
+			hint.replaceChildren(...nodes);
+		};
+
+		try {
+			chrome.commands?.getAll?.(write);
+		} catch {
+			write([]);
+		}
 	}
 
 	/**
@@ -613,10 +807,11 @@ class LinkPocketApp {
 		this.updateUserUI();
 		this.showScreen("appScreen");
 		this.renderLibraryControls();
-		this.switchTab("home");
+		this.switchTab(this.pendingLink ? "save" : "home");
 		this.setupPickers();
 		if (!hasCache) this.showLoading();
-		this.focusSearch();
+		if (this.pendingLink) this.applyPendingLink();
+		else this.focusSearch();
 
 		// Always needed: the home card offers to save the current page even
 		// when the save form is not auto-filled.
@@ -976,7 +1171,9 @@ class LinkPocketApp {
 		}
 
 		this.renderCurrentSiteCard();
-		if (this.settings.autoGetSelection) this.autoFillCurrentTab();
+		// The context menu target wins over the active tab — they differ as soon
+		// as the user right-clicked a link rather than the page itself.
+		if (this.settings.autoGetSelection && !this.pendingLink) this.autoFillCurrentTab();
 	}
 
 	/**
@@ -1021,7 +1218,7 @@ class LinkPocketApp {
 	 * letting the user fill in a form that ends on "URL required".
 	 */
 	renderSaveFormAvailability() {
-		const savable = !!this.currentTab;
+		const savable = !!this.currentTab || !!this.pendingLink;
 		const card = document.getElementById("currentPageCard");
 		const title = document.getElementById("currentPageTitle");
 		const url = document.getElementById("currentPageUrl");
@@ -1048,6 +1245,30 @@ class LinkPocketApp {
 
 		// Re-enabling must not resurrect AI buttons the plan or quota forbids
 		this.updateAiUI();
+	}
+
+	/**
+	 * Prefill the save form with the link the context menu targeted. It is not
+	 * necessarily the active tab: right-clicking a link saves that link.
+	 */
+	applyPendingLink() {
+		const pending = this.pendingLink;
+		if (!pending) return;
+
+		document.getElementById("linkUrl").value = pending.url;
+		document.getElementById("linkTitle").value = pending.title || "";
+
+		document.getElementById("currentPageTitle").textContent = pending.title || pending.url;
+		document.getElementById("currentPageUrl").textContent = pending.url;
+
+		const favicon = document.getElementById("currentFavicon");
+		favicon.src = this.faviconUrlFor(pending.url);
+		favicon.style.display = "";
+		favicon.nextElementSibling.style.display = "none";
+
+		this.renderSaveFormAvailability();
+		this.completeMetaFromApi(pending.url);
+		this.focusElement("linkTitle");
 	}
 
 	autoFillCurrentTab() {
@@ -1677,9 +1898,13 @@ class LinkPocketApp {
 		document.getElementById("linkForm").reset();
 		this.selectedTags = [];
 		this.selectedFolder = null;
+		// The context menu target has been dealt with: follow the tab again
+		this.pendingLink = null;
 		this.renderPortfolioSelect(); // form.reset() blanks the native select
 		this.renderSelectedFolder();
 		this.renderSelectedTags();
+		// Dropping the pending link can turn the form back into "nothing to save"
+		this.renderSaveFormAvailability();
 		if (this.settings.autoGetSelection) {
 			this.autoFillCurrentTab();
 		}
@@ -1995,8 +2220,9 @@ class LinkPocketApp {
 				await Promise.all([this.fetchTags(), this.fetchFolders(), this.fetchAiPlan()]);
 				this.setupPickers();
 				this.renderLibraryControls();
-				this.switchTab("home");
-				this.focusSearch();
+				this.switchTab(this.pendingLink ? "save" : "home");
+				if (this.pendingLink) this.applyPendingLink();
+				else this.focusSearch();
 				await this.loadCurrentTab();
 				await this.loadHome({ force: true });
 				this.showToast(this.t("connectedSuccess") || "Connected!");
@@ -2093,15 +2319,22 @@ class LinkPocketApp {
 
 		// ── Settings from dropdown ──
 		document.getElementById("settingsMenuBtn").addEventListener("click", () => {
-			document.getElementById("userDropdown").classList.add("hidden");
-			document.getElementById("languageSelect").value = this.settings.language || "en";
-			document.getElementById("themeSelect").value = this.settings.theme || "dark";
-			document.getElementById("autoGetSelection").checked = this.settings.autoGetSelection !== false;
-			document.getElementById("openInNewTabSetting").checked = this.settings.openInNewTab !== false;
-			document.getElementById("recentCountSelect").value = String(this.settings.recentCount);
-			document.getElementById("favoritesCountSelect").value = String(this.settings.favoritesCount);
-			this.closePalette();
-			this.showScreen("settingsScreen");
+			this.openSettings();
+		});
+
+		// Switching the quick save library changes which folders it can target —
+		// and a folder from the previous one cannot survive the move.
+		document.getElementById("quickSavePortfolioSelect").addEventListener("change", async (e) => {
+			this.quickSaveDraft.portfolioId = asId(e.target.value);
+			this.quickSaveDraft.folderId = null;
+			this.quickSaveFolders = [];
+			this.renderQuickSaveDestination();
+			await this.loadQuickSaveFolders(this.quickSaveDraft.portfolioId);
+			this.renderQuickSaveDestination();
+		});
+
+		document.getElementById("quickSaveFolderSelect").addEventListener("change", (e) => {
+			this.quickSaveDraft.folderId = asId(e.target.value);
 		});
 
 		document.getElementById("settingsBackBtn").addEventListener("click", () => {
@@ -2113,12 +2346,20 @@ class LinkPocketApp {
 			this.settings.theme = document.getElementById("themeSelect").value;
 			this.settings.autoGetSelection = document.getElementById("autoGetSelection").checked;
 			this.settings.openInNewTab = document.getElementById("openInNewTabSetting").checked;
+			this.settings.contextMenuEnabled = document.getElementById("contextMenuSetting").checked;
 			this.settings.recentCount = this.normalizeSectionSize(document.getElementById("recentCountSelect").value);
 			this.settings.favoritesCount = this.normalizeSectionSize(document.getElementById("favoritesCountSelect").value);
+
+			// The draft is the truth — the render keeps it honest. The lookup only
+			// serves to pin the folder's own library, so the pair cannot disagree.
+			const quickFolder = (this.quickSaveFolders || []).find((f) => f.id == this.quickSaveDraft.folderId) || null;
+			this.settings.quickSaveFolderId = this.quickSaveDraft.folderId ?? null;
+			this.settings.quickSavePortfolioId = quickFolder?.portfolio_id ?? this.quickSaveDraft.portfolioId ?? null;
 
 			await this.saveSettings();
 			this.applyTheme();
 			this.applyLanguage();
+			this.renderShortcutHint();
 			// Re-render the current-site card: applyLanguage() only touches
 			// static [data-i18n] nodes, not text written from JS.
 			this.renderCurrentSiteCard();
@@ -2133,7 +2374,7 @@ class LinkPocketApp {
 		const shortcutsBtn = document.getElementById("shortcutsBtn");
 		if (shortcutsBtn) {
 			shortcutsBtn.addEventListener("click", () => {
-				chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
+				chrome.tabs.create({ url: browserShortcutsUrl() });
 			});
 		}
 
@@ -2144,15 +2385,6 @@ class LinkPocketApp {
 				this.applyLanguage();
 				this.showScreen("loginScreen");
 				this.showToast(this.t("dataCleaned") || "Data cleared");
-			}
-		});
-
-		// ── Shortcut display ──
-		chrome.commands?.getAll?.((commands) => {
-			const qs = commands?.find((c) => c.name === "quick-save");
-			if (qs?.shortcut) {
-				const el = document.getElementById("currentShortcut");
-				if (el) el.textContent = qs.shortcut;
 			}
 		});
 

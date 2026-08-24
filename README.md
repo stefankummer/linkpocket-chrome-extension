@@ -7,11 +7,11 @@ bibliothèque de liens.
 
 | Fichier | Rôle |
 |---------|------|
-| `manifest.json` | Manifest V3 : permissions, menu contextuel, raccourci `Alt+Shift+S` |
+| `manifest.json` | Manifest V3 : permissions, menu contextuel, raccourcis suggérés |
 | `background.js` | Service worker : menus contextuels, sauvegarde rapide, notifications |
 | `popup.html` / `popup.css` / `popup.js` | Interface du popup (400×600) |
 | `content.js` | Retour visuel injecté dans la page après une sauvegarde rapide |
-| `locales.js` | Traductions de l'interface du popup (en / fr / de) |
+| `locales.js` | Traductions du popup **et** du service worker (en / fr / de) |
 | `_locales/` | Chaînes lues par Chrome (nom, description, menus) |
 
 Aucune étape de build : le dossier est chargé tel quel.
@@ -36,10 +36,22 @@ Le login envoie un `device_id` stable (`crypto.randomUUID`, stocké dans
 une connexion depuis un autre navigateur ne déconnecte plus les autres
 installations. Les jetons Sanctum n'expirent pas côté serveur.
 
+## Langue
+
+`detectLanguage()` (dans `locales.js`) lit `chrome.i18n.getUILanguage()`, avec
+`navigator.language` en secours, et retombe sur `en` pour toute langue non
+traduite. C'est la valeur par défaut : `settings.language` vaut `null` tant que
+l'utilisateur n'a pas choisi explicitement dans les réglages. Le service worker
+importe le même fichier (`importScripts('locales.js')`), donc les entrées du menu
+contextuel et les notifications suivent la langue choisie — et non plus
+uniquement celle de l'interface du navigateur. `_locales/` ne sert plus qu'au
+`manifest.json` (nom, description, libellé de la commande).
+
 ## Onglets
 
 Trois onglets dans la barre du bas : **Accueil**, **Sauvegarder**, **Bibliothèque**.
-Le popup ouvre sur Accueil — sauf quand celui-ci n'a rien à montrer (voir plus bas).
+Le popup ouvre sur Accueil — sauf quand celui-ci n'a rien à montrer (voir plus bas)
+ou quand un lien est en attente (voir Menu contextuel).
 
 ## Écran d'accueil
 
@@ -99,6 +111,53 @@ milieu d'un formulaire grisé.
 
 Conséquence assumée : la saisie manuelle d'un lien est elle aussi bloquée sur ces
 pages.
+
+## Menu contextuel
+
+Deux entrées, sur la page comme sur un lien, désactivées tant qu'aucun jeton
+n'est stocké :
+
+- **Sauvegarder dans LinkPocket** — dépose la cible dans `chrome.storage.local`
+  (`pendingUrl`, `pendingTitle`, `pendingAt`) puis ouvre le popup. Celui-ci
+  réclame ce lien au démarrage (`consumePendingLink()`) et **ouvre directement
+  sur l'onglet Sauvegarder pré-rempli**, au lieu de l'accueil. Le lien en attente
+  périme après `PENDING_LINK_TTL` (60 s) : `openPopup()` peut être refusé par le
+  navigateur, et une cible oubliée ne doit pas détourner une ouverture manuelle
+  ultérieure.
+- **Sauvegarde rapide dans LinkPocket** — enregistre sans ouvrir le popup.
+
+Un clic droit **sur un lien** n'a pas de titre propre (Chrome n'expose pas le
+texte de l'ancre) : le titre est laissé vide et complété par les métadonnées de
+la page cible (`/links/fetch-meta`), côté popup pour la sauvegarde normale,
+côté service worker pour la sauvegarde rapide — le nom d'hôte en dernier
+recours. Le titre de l'onglet ne décrit que la page, pas le lien.
+
+Le réglage **Afficher LinkPocket dans le menu clic droit** retire les deux
+entrées plutôt que de les griser : une entrée inerte occupe la même place. Toute
+écriture de `settings` (`chrome.storage.sync`) déclenche une reconstruction
+complète des menus — c'est aussi ce qui les retraduit après un changement de
+langue.
+
+## Sauvegarde rapide — destination
+
+La sauvegarde rapide n'ouvre jamais le popup : sa destination se choisit une fois
+dans les réglages (`quickSavePortfolioId`, `quickSaveFolderId`). Sans réglage,
+l'API décide comme avant — aucun `portfolio_id` ni `categories` n'est envoyé.
+
+Le sélecteur de dossier des réglages ne peut pas s'appuyer sur `this.folders`,
+qui n'est peuplé que pour la bibliothèque active : `loadQuickSaveFolders()`
+récupère à part les dossiers de la bibliothèque visée. Un dossier choisi épingle
+sa propre bibliothèque (`portfolio_id`), donc les deux réglages ne peuvent pas se
+contredire ; un dossier supprimé depuis retombe sur « Aucun dossier ».
+
+## Raccourcis clavier
+
+Ils appartiennent au navigateur : l'extension n'en réattribue aucun. Les réglages
+affichent ce qui est réellement lié — `chrome.commands.getAll()`, chaque liaison
+dans un `<kbd>`, « non défini » quand le navigateur a refusé la suggestion — et
+un bouton ouvre la page de configuration du navigateur. Cette URL dépend du
+navigateur (`browserShortcutsUrl()`) : `chrome://`, `edge://`, `opera://` ou
+`vivaldi://extensions/shortcuts`.
 
 ## Ouverture des liens
 

@@ -1401,9 +1401,18 @@ textarea {
     color: var(--text-faint);
 }
 
+/* Shortcuts are owned by the browser: the row is a single link out to its
+   settings page, the sentence below states what is currently bound. */
 .shortcut-row {
     justify-content: space-between;
 }
+
+.shortcut-row .btn-ghost-sm {
+    flex: 1;
+    justify-content: center;
+}
+
+#shortcutHint kbd { flex: none; }
 
 kbd {
     display: inline-block;

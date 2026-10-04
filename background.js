@@ -306,6 +306,23 @@ chrome.commands?.onCommand?.addListener(async (command) => {
     }
 });
 
+/** Count a link opened from the popup in its statistics (fire and forget). */
+async function trackClick(linkId) {
+    if (!/^\d+$/.test(String(linkId))) return;
+    const { apiKey } = await chrome.storage.local.get(['apiKey']);
+    if (!apiKey) return;
+
+    const settings = await loadSettings();
+    try {
+        await fetch(`${settings.apiEndpoint}/links/${linkId}/click`, {
+            method: 'POST',
+            headers: { Accept: 'application/json', Authorization: `Bearer ${apiKey}` },
+        });
+    } catch {
+        // Statistics only: a lost click is not worth surfacing
+    }
+}
+
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === 'GET_PENDING_LINK') {
@@ -314,6 +331,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             chrome.storage.local.remove(['pendingUrl', 'pendingTitle']);
         });
         return true;
+    }
+
+    if (request.type === 'TRACK_CLICK') {
+        trackClick(request.linkId);
+        return false;
     }
 
     if (request.type === 'QUICK_SAVE') {

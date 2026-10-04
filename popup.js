@@ -1138,14 +1138,25 @@ class LinkPocketApp {
 	 * anchor navigate: with target="_self" the page would load inside the popup
 	 * itself, so the current tab is driven through the tabs API either way.
 	 */
-	openLink(url) {
+	openLink(url, linkId = null) {
 		const href = this.safeHref(url);
 		if (!href) return;
 
+		this.trackClick(linkId);
 		if (this.settings.openInNewTab === false) chrome.tabs.update({ url: href });
 		else chrome.tabs.create({ url: href });
 
 		window.close();
+	}
+
+	/**
+	 * Count an opening in the link's statistics, as the web app does. The popup
+	 * closes right after, so the request goes through the background script,
+	 * which outlives it.
+	 */
+	trackClick(linkId) {
+		if (!linkId) return;
+		chrome.runtime.sendMessage({ type: "TRACK_CLICK", linkId }).catch(() => {});
 	}
 
 	/** Internal browser pages carry no savable URL. */
@@ -1889,7 +1900,8 @@ class LinkPocketApp {
 	}
 
 	openPaletteSelection() {
-		this.openLink(this.paletteResults[this.paletteIndex]?.url);
+		const link = this.paletteResults[this.paletteIndex];
+		this.openLink(link?.url, link?.id);
 	}
 
 	// ─── Save form ────────────────────────────────────────────────────────────
@@ -2297,9 +2309,18 @@ class LinkPocketApp {
 		// behaviour, which the anchor href already provides.
 		document.addEventListener("click", (e) => {
 			const card = e.target.closest(".link-card");
-			if (!card || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+			if (!card) return;
+			if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) {
+				this.trackClick(card.dataset.linkId);
+				return;
+			}
 			e.preventDefault();
-			this.openLink(card.href);
+			this.openLink(card.href, card.dataset.linkId);
+		});
+		// Middle click opens the anchor in a background tab: count it too
+		document.addEventListener("auxclick", (e) => {
+			const card = e.target.closest(".link-card");
+			if (card && e.button === 1) this.trackClick(card.dataset.linkId);
 		});
 
 		// ── Home: "see all" jumps to the matching library filter ──
